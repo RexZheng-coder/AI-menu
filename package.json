@@ -4,9 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "npx --yes -p typescript tsc -p tsconfig.build.json",
+    "build": "node scripts/build-static.mjs",
     "typecheck": "npx --yes -p typescript tsc --noEmit --pretty false",
-    "start": "python3 -m http.server 4173"
+    "preview": "python3 -m http.server 4173 -d dist",
+    "start": "npm run preview"
   },
   "dependencies": {},
   "devDependencies": {}
