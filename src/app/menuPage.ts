@@ -1,11 +1,20 @@
 import { renderMenuCategory } from "../components/MenuCategory.js";
 import { renderCartPanel } from "../components/CartPanel.js";
+import { renderHistoryPanel } from "../components/HistoryPanel.js";
 import { renderUploadPanel } from "../components/UploadPanel.js";
 import {
   calculateCartTotal,
   createCartItemFromMenuItem,
   generateOrderSummary,
 } from "../lib/menuUtils.js";
+import {
+  clearSavedMenus,
+  getSavedMenuById,
+  getSavedMenus,
+  removeSavedMenu,
+  saveMenuToHistory,
+  type SavedMenuRecord,
+} from "../lib/menuHistory.js";
 import { ParseMenuError, toParseMenuError } from "../lib/parseMenuErrors.js";
 import { parseMenuImages } from "../lib/parseMenuImages.js";
 import { mockMenu } from "../mock/menuMock.js";
@@ -35,6 +44,7 @@ let currentMenu: Menu | null = null;
 let uploadFiles: UploadPreview[] = [];
 let uploadError: ParseMenuError | null = null;
 let parseState: ParseState = "idle";
+let savedMenus: SavedMenuRecord[] = getSavedMenus();
 let cartItems: CartItem[] = [];
 let orderSummary: OrderSummary | null = null;
 let cartPanelRoot: HTMLElement | null = null;
@@ -42,13 +52,22 @@ let cartPanelRoot: HTMLElement | null = null;
 renderApp(appRootElement);
 
 function renderApp(root: HTMLElement): void {
-  root.replaceChildren(renderUpload());
+  root.replaceChildren(renderUpload(), renderHistory());
   cartPanelRoot = null;
 
   if (currentMenu) {
     root.append(renderMenuPage(currentMenu));
     renderCart();
   }
+}
+
+function renderHistory(): HTMLElement {
+  return renderHistoryPanel({
+    savedMenus,
+    onLoadMenu: loadSavedMenu,
+    onRemoveMenu: deleteSavedMenu,
+    onClearMenus: clearMenuHistory,
+  });
 }
 
 function renderUpload(): HTMLElement {
@@ -170,12 +189,12 @@ async function analyzeUploadedMenu(): Promise<void> {
     await delay(150);
     parseState = "parsing";
     renderApp(appRootElement);
-    setCurrentMenu(
-      await withParseTimeout(
-        parseMenuImages(uploadFiles.map((filePreview) => filePreview.file)),
-        getParseTimeoutMs(),
-      ),
+    const parsedMenu = await withParseTimeout(
+      parseMenuImages(uploadFiles.map((filePreview) => filePreview.file)),
+      getParseTimeoutMs(),
     );
+    setCurrentMenu(parsedMenu);
+    savedMenus = saveMenuToHistory(parsedMenu);
     parseState = "success";
   } catch (error) {
     const parseError = toParseMenuError(error);
@@ -195,6 +214,32 @@ function useSampleMenu(): void {
   uploadError = null;
   parseState = "success";
   setCurrentMenu(mockMenu);
+  renderApp(appRootElement);
+}
+
+function loadSavedMenu(menuId: string): void {
+  const savedMenu = getSavedMenuById(menuId);
+
+  if (!savedMenu) {
+    savedMenus = getSavedMenus();
+    renderApp(appRootElement);
+    return;
+  }
+
+  uploadError = null;
+  parseState = "success";
+  setCurrentMenu(savedMenu.menu);
+  renderApp(appRootElement);
+}
+
+function deleteSavedMenu(menuId: string): void {
+  savedMenus = removeSavedMenu(menuId);
+  renderApp(appRootElement);
+}
+
+function clearMenuHistory(): void {
+  clearSavedMenus();
+  savedMenus = [];
   renderApp(appRootElement);
 }
 
