@@ -1,0 +1,16 @@
+
+{
+  "order_summary_id": "summary_001",
+  "restaurant_name": "Unknown Restaurant",
+  "items": [
+    {
+      "name_en": "Garlic Bread",
+      "name_zh": "蒜香面包",
+      "quantity": 2,
+      "notes": "不要洋葱",
+      "subtotal": 17.98
+    }
+  ],
+  "estimated_total": 17.98,
+  "display_text": "我要两份蒜香面包，不要洋葱。"
+}

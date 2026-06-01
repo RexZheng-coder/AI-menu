@@ -1,0 +1,46 @@
+{
+  "menu_id": "menu_001",
+  "restaurant": {
+    "name": "Unknown Restaurant",
+    "address": null,
+    "cuisine_type": "Italian"
+  },
+  "language": {
+    "source": "en",
+    "target": "zh"
+  },
+  "categories": [
+    {
+      "category_id": "cat_001",
+      "name_en": "Appetizers",
+      "name_zh": "前菜",
+      "items": [
+        {
+          "item_id": "item_001",
+          "name_en": "Garlic Bread",
+          "name_zh": "蒜香面包",
+          "description_en": "Toasted bread with garlic butter",
+          "description_zh": "烤面包配蒜香黄油",
+          "price": {
+            "amount": 8.99,
+            "currency": "USD",
+            "raw": "$8.99"
+          },
+          "tags": ["vegetarian", "bread"],
+          "tags_zh": ["素食", "面包"],
+          "spicy_level": 0,
+          "allergens": ["gluten", "dairy"],
+          "is_recommended": false,
+          "confidence": 0.92
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "source_type": "image_upload",
+    "image_urls": [],
+    "ai_model": "gpt-4o",
+    "created_at": "2026-05-24T00:00:00Z",
+    "status": "completed"
+  }
+}

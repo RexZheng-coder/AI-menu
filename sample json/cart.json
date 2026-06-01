@@ -1,0 +1,22 @@
+{
+  "cart_id": "cart_001",
+  "menu_id": "menu_001",
+  "items": [
+    {
+      "item_id": "item_001",
+      "name_en": "Garlic Bread",
+      "name_zh": "蒜香面包",
+      "unit_price": 8.99,
+      "quantity": 2,
+      "notes": "不要洋葱",
+      "subtotal": 17.98
+    }
+  ],
+  "total": {
+    "subtotal": 17.98,
+    "tax": null,
+    "tip": null,
+    "estimated_total": 17.98,
+    "currency": "USD"
+  }
+}

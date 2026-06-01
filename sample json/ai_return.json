@@ -1,0 +1,22 @@
+{
+  "restaurant_name": "Unknown",
+  "categories": [
+    {
+      "name_en": "Appetizers",
+      "name_zh": "前菜",
+      "items": [
+        {
+          "name_en": "Garlic Bread",
+          "name_zh": "蒜香面包",
+          "description_en": "Toasted bread with garlic butter",
+          "description_zh": "烤面包配蒜香黄油",
+          "price_raw": "$8.99",
+          "price_amount": 8.99,
+          "tags": ["vegetarian", "bread"],
+          "spicy_level": 0,
+          "confidence": 0.92
+        }
+      ]
+    }
+  ]
+}
