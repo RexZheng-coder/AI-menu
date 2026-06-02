@@ -364,7 +364,7 @@ function updateCartItemNotes(itemId: string, notes: string): void {
       : item,
   );
   orderSummary = null;
-  renderCart();
+  window.setTimeout(renderCart, 0);
 }
 
 function createOrderSummary(): void {

@@ -35,7 +35,11 @@ export function renderUploadPanel(props: UploadPanelProps): HTMLElement {
   description.className = "upload-panel__description";
   description.textContent = "Choose JPG, PNG, or WebP menu images. This step currently uses a mock parser so the frontend can be wired before real AI/OCR.";
 
-  copy.append(eyebrow, title, description);
+  const modeLabel = document.createElement("p");
+  modeLabel.className = "upload-panel__mode";
+  modeLabel.textContent = "Mock Demo Mode: uploaded images return the sample parsed menu in static deployment.";
+
+  copy.append(eyebrow, title, description, modeLabel);
 
   const controls = document.createElement("div");
   controls.className = "upload-panel__controls";

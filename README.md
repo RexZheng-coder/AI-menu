@@ -8,6 +8,12 @@ Restaurant menus can be hard to read when they are photographed, handwritten, po
 
 The current app is a static MVP. It demonstrates the full frontend experience using mock parsing while preparing a secure backend seam for future AI/OCR integration.
 
+## Live Demo
+
+TBD
+
+The app is deployment-ready as a static MVP. In the deployed static version, uploaded menu images intentionally return the mock parsed menu so the full frontend flow can be demonstrated without exposing API keys or requiring a backend.
+
 ## MVP Features
 
 - Upload-first flow for menu images
@@ -42,6 +48,25 @@ The current app is a static MVP. It demonstrates the full frontend experience us
 7. Adjust quantities and add notes.
 8. Generate a bilingual order summary.
 9. Reopen previously parsed menus from `Recent Menus`.
+
+## Demo Flow
+
+1. Open the app and start on the upload-first screen.
+2. Choose a JPG, PNG, or WebP menu image.
+3. Click `Scan Menu`.
+4. In static mock mode, the uploaded image returns the prepared sample parsed menu.
+5. Browse bilingual categories, dish names, descriptions, tags, spice levels, and prices.
+6. Add items to the cart, adjust quantities, and add item notes.
+7. Generate the bilingual order summary.
+8. Reload or revisit the page and load a saved menu from `Recent Menus`.
+
+To show the future backend path, open the app with:
+
+```text
+?parse=real
+```
+
+Without a backend route, real mode shows a friendly failure state. This demonstrates where `POST /api/menus/parse` will connect later while keeping the current deployment static and key-free.
 
 ## AI/OCR Status
 
@@ -108,6 +133,15 @@ Deployment config is included for:
 - Netlify: `netlify.toml`
 
 See `docs/deployment.md` for exact deployment notes.
+
+Deployment checklist summary:
+
+- Install dependencies: `npm install`
+- Type-check: `npm run typecheck`
+- Build: `npm run build`
+- Preview production output: `npm run start`
+- Deploy `dist/` through Vercel or Netlify using the included config files.
+- Smoke test upload, mock parsing, menu display, cart, order summary, history, and `?parse=real` error handling after deployment.
 
 ## Screenshots
 

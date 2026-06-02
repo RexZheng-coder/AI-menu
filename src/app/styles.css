@@ -79,6 +79,20 @@ button:disabled {
   line-height: 1.6;
 }
 
+.upload-panel__mode {
+  display: inline-flex;
+  max-width: 620px;
+  margin: 16px 0 0;
+  padding: 7px 10px;
+  border: 1px solid rgba(35, 111, 93, 0.18);
+  border-radius: 8px;
+  background: rgba(238, 246, 242, 0.78);
+  color: #236f5d;
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
 .upload-panel__controls {
   display: grid;
   gap: 14px;
