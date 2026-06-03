@@ -1,4 +1,3 @@
-import { MENU_PARSE_JSON_SCHEMA, MENU_PARSE_PROMPT } from "../lib/menuParsePrompt.js";
 import { sanitizeMenu } from "../lib/menuValidation.js";
 import type { Menu } from "../types/menu.js";
 import type { ServerMenuImage } from "./menuImageInput.js";
@@ -29,9 +28,26 @@ type MiMoContentPart =
       text: string;
     };
 
+type LightweightMenuExtraction = {
+  restaurant_name: string | null;
+  cuisine_type: string | null;
+  categories: LightweightMenuCategory[];
+};
+
+type LightweightMenuCategory = {
+  name_en: string;
+  items: LightweightMenuItem[];
+};
+
+type LightweightMenuItem = {
+  name_en: string;
+  description_en: string | null;
+  price_raw: string | null;
+};
+
 const defaultBaseUrl = "https://api.xiaomimimo.com/v1";
 const defaultModel = "mimo-v2.5";
-const defaultTimeoutMs = 18_000;
+const defaultTimeoutMs = 20_000;
 const imageCapableModels = new Set(["mimo-v2.5", "mimo-v2-omni"]);
 
 export type MiMoParserErrorCode =
@@ -90,6 +106,7 @@ export async function parseMenuWithMiMo(
   const timeoutId = setTimeout(() => {
     abortController.abort();
   }, timeoutMs);
+  const requestStartedAt = Date.now();
 
   let response: Response;
   let responseText: string;
@@ -146,6 +163,8 @@ export async function parseMenuWithMiMo(
     clearTimeout(timeoutId);
   }
 
+  const requestDurationMs = Date.now() - requestStartedAt;
+
   if (!response.ok) {
     const errorMessage = extractErrorMessage(responseText);
 
@@ -165,15 +184,28 @@ export async function parseMenuWithMiMo(
   }
 
   const responseBody = parseResponseJson(responseText);
+  console.info("[menu-parse]", {
+    event: "mimo_response_summary",
+    durationMs: requestDurationMs,
+    bodyLength: responseText.length,
+    finishReason: extractMiMoFinishReason(responseBody),
+    usage: extractMiMoUsage(responseBody),
+  });
   const modelText = extractMiMoOutputText(responseBody);
-  const parsedJson = parseJsonFromText(modelText);
+  const extraction = sanitizeLightweightExtraction(parseJsonFromText(modelText));
+  const now = new Date().toISOString();
+  const menuInput = createMenuFromLightweightExtraction(extraction, {
+    imageUrls,
+    model,
+    now,
+  });
   console.info("[menu-parse]", {
     event: "sanitize_start",
     model,
   });
-  const menu = sanitizeMenu(parsedJson, {
+  const menu = sanitizeMenu(menuInput, {
     imageUrls,
-    now: new Date().toISOString(),
+    now,
   });
   console.info("[menu-parse]", {
     event: "sanitize_done",
@@ -217,17 +249,36 @@ function createMiMoRequestBody(model: string, images: ServerMenuImage[]): Record
         content: userContent,
       },
     ],
-    max_completion_tokens: 4096,
+    max_completion_tokens: 2000,
     temperature: 0.1,
     stream: false,
+    thinking: {
+      type: "disabled",
+    },
   };
 }
 
 function createMenuPrompt(): string {
-  return `${MENU_PARSE_PROMPT.trim()}
-
-Use this JSON schema as the output contract. Return only one JSON object:
-${JSON.stringify(MENU_PARSE_JSON_SCHEMA)}`;
+  return `Extract visible restaurant menu text from the image(s).
+Return JSON only. Do not translate, tag, infer allergens, infer spice, or add commentary.
+Keep item descriptions short. If a value is not visible, use null.
+Use this exact lightweight JSON shape:
+{
+  "restaurant_name": string | null,
+  "cuisine_type": string | null,
+  "categories": [
+    {
+      "name_en": string,
+      "items": [
+        {
+          "name_en": string,
+          "description_en": string | null,
+          "price_raw": string | null
+        }
+      ]
+    }
+  ]
+}`;
 }
 
 function createChatCompletionsUrl(baseUrl: string): string {
@@ -244,6 +295,17 @@ function safeUrlHost(url: string): string {
   } catch {
     return "invalid-url";
   }
+}
+
+function extractMiMoFinishReason(input: unknown): string | undefined {
+  const body = asRecord(input);
+  const firstChoice = asRecord(asArray(body.choices)[0]);
+
+  return asString(firstChoice.finish_reason);
+}
+
+function extractMiMoUsage(input: unknown): unknown {
+  return asRecord(input).usage;
 }
 
 function extractMiMoOutputText(input: unknown): string {
@@ -268,6 +330,109 @@ function extractMiMoOutputText(input: unknown): string {
   }
 
   throw new Error("MiMo response did not include menu JSON text.");
+}
+
+function sanitizeLightweightExtraction(input: unknown): LightweightMenuExtraction {
+  const source = asRecord(input);
+
+  return {
+    restaurant_name: asNullableString(source.restaurant_name),
+    cuisine_type: asNullableString(source.cuisine_type),
+    categories: asArray(source.categories)
+      .map((categoryInput, categoryIndex) => sanitizeLightweightCategory(categoryInput, categoryIndex))
+      .filter((category) => category.items.length > 0),
+  };
+}
+
+function sanitizeLightweightCategory(input: unknown, index: number): LightweightMenuCategory {
+  const source = asRecord(input);
+  const nameEn = asString(source.name_en) ?? `Menu ${index + 1}`;
+
+  return {
+    name_en: nameEn,
+    items: asArray(source.items)
+      .map((itemInput, itemIndex) => sanitizeLightweightItem(itemInput, itemIndex))
+      .filter((item) => item.name_en.length > 0),
+  };
+}
+
+function sanitizeLightweightItem(input: unknown, index: number): LightweightMenuItem {
+  const source = asRecord(input);
+
+  return {
+    name_en: asString(source.name_en) ?? `Item ${index + 1}`,
+    description_en: asNullableString(source.description_en),
+    price_raw: asNullableString(source.price_raw),
+  };
+}
+
+function createMenuFromLightweightExtraction(
+  extraction: LightweightMenuExtraction,
+  options: {
+    imageUrls: string[];
+    model: string;
+    now: string;
+  },
+): Record<string, unknown> {
+  const restaurantName = extraction.restaurant_name ?? "Parsed Menu";
+  const menuSlug = slugify(restaurantName);
+
+  return {
+    menu_id: `menu_${menuSlug}`,
+    restaurant: {
+      name: restaurantName,
+      address: null,
+      cuisine_type: extraction.cuisine_type,
+    },
+    language: {
+      source: "en",
+      target: "zh",
+    },
+    categories: extraction.categories.map((category, categoryIndex) =>
+      createMenuCategory(category, categoryIndex),
+    ),
+    metadata: {
+      source_type: "image_upload",
+      image_urls: options.imageUrls,
+      ai_model: options.model,
+      created_at: options.now,
+      status: "completed",
+    },
+  };
+}
+
+function createMenuCategory(category: LightweightMenuCategory, index: number): Record<string, unknown> {
+  const categoryId = `cat_${slugify(category.name_en)}_${index + 1}`;
+
+  return {
+    category_id: categoryId,
+    name_en: category.name_en,
+    name_zh: category.name_en,
+    items: category.items.map((item, itemIndex) => createMenuItem(item, categoryId, itemIndex)),
+  };
+}
+
+function createMenuItem(item: LightweightMenuItem, categoryId: string, index: number): Record<string, unknown> {
+  const itemName = item.name_en || `Item ${index + 1}`;
+
+  return {
+    item_id: `${categoryId}_item_${slugify(itemName)}_${index + 1}`,
+    name_en: itemName,
+    name_zh: itemName,
+    description_en: item.description_en,
+    description_zh: item.description_en,
+    price: {
+      amount: parsePriceAmount(item.price_raw),
+      currency: "USD",
+      raw: item.price_raw,
+    },
+    tags: [],
+    tags_zh: [],
+    spicy_level: 0,
+    allergens: [],
+    is_recommended: false,
+    confidence: 0.8,
+  };
 }
 
 function parseResponseJson(text: string): unknown {
@@ -346,4 +511,26 @@ function asArray(input: unknown): unknown[] {
 
 function asString(input: unknown): string | undefined {
   return typeof input === "string" && input.trim().length > 0 ? input.trim() : undefined;
+}
+
+function asNullableString(input: unknown): string | null {
+  return asString(input) ?? null;
+}
+
+function parsePriceAmount(raw: string | null): number | null {
+  if (!raw) {
+    return null;
+  }
+
+  const match = raw.replace(/,/g, "").match(/\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : null;
+}
+
+function slugify(value: string): string {
+  const slug = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  return slug || "menu";
 }
