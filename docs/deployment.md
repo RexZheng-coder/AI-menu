@@ -96,6 +96,30 @@ The Vercel route `POST /api/menus/parse` accepts multipart image uploads from th
 
 API keys must stay server-side only in `MIMO_API_KEY`. Mock mode remains the default even when MiMo is configured.
 
+The parser is implemented as a Vercel Node.js Serverless Function, not an Edge Function. `vercel.json` sets `/api/menus/parse` to a 30-second maximum duration, and the MiMo provider call has an app-level timeout of about 20 seconds so the API can return structured JSON before Vercel stops the function:
+
+```json
+{
+  "ok": false,
+  "code": "MIMO_TIMEOUT",
+  "error": "Menu parsing timed out. Please try a clearer or smaller image."
+}
+```
+
+## Troubleshooting
+
+### 504 FUNCTION_INVOCATION_TIMEOUT
+
+This means Vercel stopped the function because it did not return in time. For real menu parsing, the usual causes are slow MiMo latency, very large or unclear images, too many uploaded images, or a model/provider issue.
+
+The app now uses a Node.js function plus an app-level MiMo timeout so slow provider responses should return `MIMO_TIMEOUT` JSON before Vercel's platform timeout. If you still see a platform 504:
+
+- Upload one smaller, clearer image and retry.
+- Check Vercel function logs for `request_start`, `images_received`, `mimo_response_status`, `mimo_timeout`, or `parse_failed`.
+- Check MiMo service latency and model availability.
+- Try a faster/smaller model through `MIMO_MODEL` if available.
+- Confirm the deployed build includes the latest Node function changes.
+
 ## Netlify Limitation
 
 The current real parser route is implemented for Vercel serverless functions. Netlify deployment remains suitable for the mock/static MVP unless an equivalent Netlify function is added later.

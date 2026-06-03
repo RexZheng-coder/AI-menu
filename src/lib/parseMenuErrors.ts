@@ -10,6 +10,7 @@ export type ParseMenuErrorCode =
   | "server_config"
   | "provider_failure"
   | "invalid_request"
+  | "mimo_timeout"
   | "unknown";
 
 export class ParseMenuError extends Error {

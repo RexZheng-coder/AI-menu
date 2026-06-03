@@ -77,9 +77,10 @@ async function parseWithBackend(files: File[]): Promise<Menu> {
     const errorMessage = asString(errorBody.error);
 
     if (errorMessage) {
+      const backendCode = asString(errorBody.code);
       throw new ParseMenuError(
-        getBackendErrorCode(asString(errorBody.code), response.status),
-        errorMessage,
+        getBackendErrorCode(backendCode, response.status),
+        formatBackendErrorMessage(backendCode, errorMessage),
       );
     }
 
@@ -95,9 +96,12 @@ async function parseWithBackend(files: File[]): Promise<Menu> {
   const parsedBody = asRecord(body);
 
   if (parsedBody.ok === false) {
+    const backendCode = asString(parsedBody.code);
+    const errorMessage = asString(parsedBody.error) ?? "Menu parsing failed. Please try again.";
+
     throw new ParseMenuError(
-      getBackendErrorCode(asString(parsedBody.code), response.status),
-      asString(parsedBody.error) ?? "Menu parsing failed. Please try again.",
+      getBackendErrorCode(backendCode, response.status),
+      formatBackendErrorMessage(backendCode, errorMessage),
     );
   }
 
@@ -152,27 +156,46 @@ async function readJsonResponse(response: Response): Promise<Record<string, unkn
 }
 
 function getBackendErrorCode(code: string | undefined, status: number): ParseMenuError["code"] {
-  if (code === "no_images") {
+  if (code === "NO_IMAGES" || code === "no_images") {
     return "no_files";
   }
 
-  if (code === "unsupported_file_type") {
+  if (code === "UNSUPPORTED_FILE_TYPE" || code === "unsupported_file_type") {
     return "unsupported_file_type";
   }
 
-  if (code === "file_too_large") {
+  if (code === "FILE_TOO_LARGE" || code === "file_too_large") {
     return "file_too_large";
   }
 
-  if (code === "mimo_parse_failed") {
+  if (code === "MIMO_TIMEOUT") {
+    return "mimo_timeout";
+  }
+
+  if (code === "SERVER_CONFIG") {
+    return "server_config";
+  }
+
+  if (code === "MIMO_PARSE_FAILED" || code === "mimo_parse_failed") {
     return status === 503 ? "server_config" : "provider_failure";
   }
 
-  if (code === "invalid_content_type" || code === "invalid_form_data" || code === "invalid_file_field") {
+  if (
+    code === "INVALID_CONTENT_TYPE" ||
+    code === "INVALID_FORM_DATA" ||
+    code === "INVALID_FILE_FIELD" ||
+    code === "invalid_content_type" ||
+    code === "invalid_form_data" ||
+    code === "invalid_file_field"
+  ) {
     return "invalid_request";
   }
 
   return "unknown";
+}
+
+function formatBackendErrorMessage(code: string | undefined, message: string): string {
+  return code ? `${code}: ${message}` : message;
 }
 
 function ensureMenuCanRender(menu: Menu): Menu {

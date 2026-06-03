@@ -13,6 +13,7 @@ type MiMoMenuParserOptions = {
   apiKey?: string;
   baseUrl?: string;
   model?: string;
+  timeoutMs?: number;
   fetchFn?: typeof fetch;
 };
 
@@ -30,6 +31,7 @@ type MiMoContentPart =
 
 const defaultBaseUrl = "https://api.xiaomimimo.com/v1";
 const defaultModel = "mimo-v2.5";
+const defaultTimeoutMs = 20_000;
 
 export async function parseMenuWithMiMo(
   images: ServerMenuImage[],
@@ -48,17 +50,59 @@ export async function parseMenuWithMiMo(
   const model = options.model ?? readEnv("MIMO_MODEL") ?? defaultModel;
   const endpoint = createChatCompletionsUrl(options.baseUrl ?? readEnv("MIMO_BASE_URL") ?? defaultBaseUrl);
   const fetchFn = options.fetchFn ?? fetch;
+  const timeoutMs = options.timeoutMs ?? defaultTimeoutMs;
   const imageUrls = images.map((image) => image.name);
+  const abortController = new AbortController();
+  const timeoutId = setTimeout(() => {
+    abortController.abort();
+  }, timeoutMs);
 
-  const response = await fetchFn(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "api-key": apiKey,
-    },
-    body: JSON.stringify(createMiMoRequestBody(model, images)),
-  });
-  const responseText = await response.text();
+  let response: Response;
+  let responseText: string;
+
+  try {
+    console.info("[menu-parse]", {
+      event: "mimo_request_start",
+      model,
+      imageCount: images.length,
+      timeoutMs,
+    });
+
+    response = await fetchFn(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "api-key": apiKey,
+      },
+      body: JSON.stringify(createMiMoRequestBody(model, images)),
+      signal: abortController.signal,
+    });
+
+    console.info("[menu-parse]", {
+      event: "mimo_response_status",
+      status: response.status,
+      ok: response.ok,
+    });
+
+    responseText = await response.text();
+  } catch (error) {
+    if (isAbortError(error)) {
+      console.warn("[menu-parse]", {
+        event: "mimo_timeout",
+        code: "MIMO_TIMEOUT",
+        timeoutMs,
+      });
+      throw new Error("MIMO_TIMEOUT");
+    }
+
+    console.warn("[menu-parse]", {
+      event: "mimo_request_error",
+      code: "MIMO_PARSE_FAILED",
+    });
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!response.ok) {
     throw new Error(`MiMo parsing request failed with status ${response.status}: ${extractErrorMessage(responseText)}`);
@@ -205,6 +249,10 @@ function extractErrorMessage(responseText: string): string {
   } catch {
     return responseText.slice(0, 240);
   }
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
 }
 
 function readEnv(name: string): string | undefined {
