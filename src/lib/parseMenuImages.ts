@@ -61,7 +61,7 @@ async function parseWithBackend(files: File[]): Promise<Menu> {
     formData.append("images", file, file.name);
   }
 
-  const response = await fetch(parseEndpoint, {
+  const response = await fetch(createParseEndpoint(), {
     method: "POST",
     body: formData,
   }).catch((error: unknown) => {
@@ -95,6 +95,10 @@ async function parseWithBackend(files: File[]): Promise<Menu> {
   const body = await readJsonResponse(response);
   const parsedBody = asRecord(body);
 
+  if (parsedBody.debug) {
+    throw new ParseMenuError("invalid_request", formatDebugResponseMessage(asRecord(parsedBody.debug)));
+  }
+
   if (parsedBody.ok === false) {
     const backendCode = asString(parsedBody.code);
     const errorMessage = asString(parsedBody.error) ?? "Menu parsing failed. Please try again.";
@@ -117,6 +121,18 @@ function shouldUseBackendParser(): boolean {
   return params.get("parse") === "real" || params.get("ai") === "1";
 }
 
+function createParseEndpoint(): string {
+  const params = new URLSearchParams();
+  const currentParams = new URLSearchParams(window.location.search);
+
+  if (currentParams.get("debug") === "1") {
+    params.set("debug", "1");
+  }
+
+  const queryString = params.toString();
+  return queryString ? `${parseEndpoint}?${queryString}` : parseEndpoint;
+}
+
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => {
     window.setTimeout(resolve, milliseconds);
@@ -133,6 +149,19 @@ function asRecord(input: unknown): Record<string, unknown> {
 
 function asString(input: unknown): string | undefined {
   return typeof input === "string" && input.trim().length > 0 ? input.trim() : undefined;
+}
+
+function asNumber(input: unknown): number | undefined {
+  return typeof input === "number" && Number.isFinite(input) ? input : undefined;
+}
+
+function asStringArray(input: unknown): string[] {
+  return Array.isArray(input)
+    ? input.flatMap((value) => {
+        const stringValue = asString(value);
+        return stringValue ? [stringValue] : [];
+      })
+    : [];
 }
 
 async function readOptionalJsonResponse(response: Response): Promise<Record<string, unknown>> {
@@ -172,6 +201,14 @@ function getBackendErrorCode(code: string | undefined, status: number): ParseMen
     return "mimo_timeout";
   }
 
+  if (code === "MIMO_API_ERROR") {
+    return "mimo_api_error";
+  }
+
+  if (code === "MIMO_UNSUPPORTED_MODEL") {
+    return "unsupported_model";
+  }
+
   if (code === "SERVER_CONFIG") {
     return "server_config";
   }
@@ -196,6 +233,14 @@ function getBackendErrorCode(code: string | undefined, status: number): ParseMen
 
 function formatBackendErrorMessage(code: string | undefined, message: string): string {
   return code ? `${code}: ${message}` : message;
+}
+
+function formatDebugResponseMessage(debug: Record<string, unknown>): string {
+  const imageCount = asNumber(debug.imageCount) ?? 0;
+  const totalBytes = asNumber(debug.totalBytes) ?? 0;
+  const fileTypes = asStringArray(debug.fileTypes).join(", ") || "unknown";
+
+  return `DEBUG_UPLOAD_OK: ${imageCount} image(s), ${totalBytes} bytes, types: ${fileTypes}`;
 }
 
 function ensureMenuCanRender(menu: Menu): Menu {

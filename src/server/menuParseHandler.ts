@@ -1,6 +1,6 @@
 import { validateMenuHasItems } from "../lib/menuValidation.js";
 import { createServerMenuImages, type ServerMenuImage, type ServerUploadedImageFile } from "./menuImageInput.js";
-import { parseMenuWithMiMo } from "./mimoMenuParser.js";
+import { MiMoParserError, parseMenuWithMiMo, type MiMoParserErrorCode } from "./mimoMenuParser.js";
 import type { Menu } from "../types/menu.js";
 
 export type ParseMenuRequest = {
@@ -14,6 +14,8 @@ export type ParseMenuResponse =
     }
   | {
       ok: false;
+      code?: MiMoParserErrorCode | "EMPTY_MENU";
+      status?: number;
       error: string;
     };
 
@@ -25,6 +27,8 @@ export async function parseMenuImagesOnServer(request: ParseMenuRequest): Promis
     if (validationError) {
       return {
         ok: false,
+        code: "EMPTY_MENU",
+        status: 422,
         error: validationError,
       };
     }
@@ -34,8 +38,18 @@ export async function parseMenuImagesOnServer(request: ParseMenuRequest): Promis
       menu,
     };
   } catch (error) {
+    if (error instanceof MiMoParserError) {
+      return {
+        ok: false,
+        code: error.code,
+        status: error.status,
+        error: error.message,
+      };
+    }
+
     return {
       ok: false,
+      code: "MIMO_PARSE_FAILED",
       error: error instanceof Error ? error.message : "Menu parsing failed. Please try again.",
     };
   }

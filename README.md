@@ -157,6 +157,8 @@ MIMO_BASE_URL=https://api.xiaomimimo.com/v1
 MIMO_MODEL=mimo-v2.5
 ```
 
+Use the Xiaomi MiMo pay-as-you-go API key format, usually `sk-xxxxx`, with the OpenAI-compatible base URL above. Do not mix Token Plan `tp-xxxxx` credentials or token-plan base URLs with this route. Real image parsing also requires the selected MiMo model to support image understanding; the default is `mimo-v2.5`.
+
 ## Screenshots
 
 Screenshot placeholder:
@@ -169,6 +171,7 @@ The current generated screenshot file is ignored by Git and is not referenced di
 
 - Mock parsing remains the default, even when MiMo env vars are configured.
 - Real MiMo parsing only works where the Vercel API route is deployed and `MIMO_API_KEY` is set.
+- Pay-as-you-go and Token Plan credentials/base URLs are different; this project is configured for pay-as-you-go.
 - Menu history is local to the browser and stored in `localStorage`.
 - There is no authentication, database, payment, or order submission.
 - Uploaded images are not persisted by this app, but real mode sends them to the configured MiMo provider for parsing.

@@ -31,7 +31,28 @@ type MiMoContentPart =
 
 const defaultBaseUrl = "https://api.xiaomimimo.com/v1";
 const defaultModel = "mimo-v2.5";
-const defaultTimeoutMs = 20_000;
+const defaultTimeoutMs = 18_000;
+const imageCapableModels = new Set(["mimo-v2.5", "mimo-v2-omni"]);
+
+export type MiMoParserErrorCode =
+  | "SERVER_CONFIG"
+  | "MIMO_TIMEOUT"
+  | "MIMO_API_ERROR"
+  | "MIMO_UNSUPPORTED_MODEL"
+  | "MIMO_PARSE_FAILED";
+
+export class MiMoParserError extends Error {
+  readonly code: MiMoParserErrorCode;
+  readonly status?: number;
+
+  constructor(code: MiMoParserErrorCode, message: string, options: { status?: number; cause?: unknown } = {}) {
+    super(message);
+    this.name = "MiMoParserError";
+    this.code = code;
+    this.status = options.status;
+    this.cause = options.cause;
+  }
+}
 
 export async function parseMenuWithMiMo(
   images: ServerMenuImage[],
@@ -40,14 +61,27 @@ export async function parseMenuWithMiMo(
   const apiKey = options.apiKey ?? readEnv("MIMO_API_KEY");
 
   if (!apiKey) {
-    throw new Error("MiMo API key is not configured. Set MIMO_API_KEY in Vercel environment variables.");
+    throw new MiMoParserError(
+      "SERVER_CONFIG",
+      "MiMo API key is not configured. Set MIMO_API_KEY in Vercel environment variables.",
+      { status: 503 },
+    );
   }
 
   if (images.length === 0) {
-    throw new Error("No menu images were provided.");
+    throw new MiMoParserError("MIMO_PARSE_FAILED", "No menu images were provided.");
   }
 
   const model = options.model ?? readEnv("MIMO_MODEL") ?? defaultModel;
+
+  if (!imageCapableModels.has(model)) {
+    throw new MiMoParserError(
+      "MIMO_UNSUPPORTED_MODEL",
+      `MiMo model ${model} is not configured for image understanding. Use mimo-v2.5 for pay-as-you-go image parsing.`,
+      { status: 400 },
+    );
+  }
+
   const endpoint = createChatCompletionsUrl(options.baseUrl ?? readEnv("MIMO_BASE_URL") ?? defaultBaseUrl);
   const fetchFn = options.fetchFn ?? fetch;
   const timeoutMs = options.timeoutMs ?? defaultTimeoutMs;
@@ -63,6 +97,7 @@ export async function parseMenuWithMiMo(
   try {
     console.info("[menu-parse]", {
       event: "mimo_request_start",
+      endpointHost: safeUrlHost(endpoint),
       model,
       imageCount: images.length,
       timeoutMs,
@@ -81,6 +116,7 @@ export async function parseMenuWithMiMo(
     console.info("[menu-parse]", {
       event: "mimo_response_status",
       status: response.status,
+      statusText: response.statusText,
       ok: response.ok,
     });
 
@@ -92,28 +128,56 @@ export async function parseMenuWithMiMo(
         code: "MIMO_TIMEOUT",
         timeoutMs,
       });
-      throw new Error("MIMO_TIMEOUT");
+      throw new MiMoParserError(
+        "MIMO_TIMEOUT",
+        "Menu parsing timed out. Please try again with a clearer image.",
+        { status: 504, cause: error },
+      );
     }
 
     console.warn("[menu-parse]", {
       event: "mimo_request_error",
       code: "MIMO_PARSE_FAILED",
     });
-    throw error;
+    throw new MiMoParserError("MIMO_PARSE_FAILED", "MiMo request failed before receiving a response.", {
+      cause: error,
+    });
   } finally {
     clearTimeout(timeoutId);
   }
 
   if (!response.ok) {
-    throw new Error(`MiMo parsing request failed with status ${response.status}: ${extractErrorMessage(responseText)}`);
+    const errorMessage = extractErrorMessage(responseText);
+
+    console.warn("[menu-parse]", {
+      event: "mimo_response_error",
+      code: "MIMO_API_ERROR",
+      status: response.status,
+      statusText: response.statusText,
+      bodyPreview: responseText.slice(0, 500),
+    });
+
+    throw new MiMoParserError(
+      "MIMO_API_ERROR",
+      `MiMo API error ${response.status}: ${errorMessage}`,
+      { status: response.status },
+    );
   }
 
   const responseBody = parseResponseJson(responseText);
   const modelText = extractMiMoOutputText(responseBody);
   const parsedJson = parseJsonFromText(modelText);
+  console.info("[menu-parse]", {
+    event: "sanitize_start",
+    model,
+  });
   const menu = sanitizeMenu(parsedJson, {
     imageUrls,
     now: new Date().toISOString(),
+  });
+  console.info("[menu-parse]", {
+    event: "sanitize_done",
+    categoryCount: menu.categories.length,
   });
 
   return {
@@ -172,6 +236,14 @@ function createChatCompletionsUrl(baseUrl: string): string {
   return trimmedBaseUrl.endsWith("/chat/completions")
     ? trimmedBaseUrl
     : `${trimmedBaseUrl}/chat/completions`;
+}
+
+function safeUrlHost(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return "invalid-url";
+  }
 }
 
 function extractMiMoOutputText(input: unknown): string {

@@ -37,12 +37,14 @@ Recommended flow:
 Server-side MiMo variables:
 
 ```text
-MIMO_API_KEY=your-server-side-key
+MIMO_API_KEY=sk-your-pay-as-you-go-key
 MIMO_BASE_URL=https://api.xiaomimimo.com/v1
 MIMO_MODEL=mimo-v2.5
 ```
 
 Do not prefix these with frontend/public env names. They must stay server-side only.
+
+Use the Xiaomi MiMo pay-as-you-go API here. Pay-as-you-go keys normally use an `sk-xxxxx` format and the OpenAI-compatible base URL above. Token Plan keys such as `tp-xxxxx` and token-plan base URLs are different products and should not be mixed with this route.
 
 ## Deploy To Netlify
 
@@ -76,6 +78,7 @@ Run this against the deployed URL:
 - Recent menu history appears after parsing and can reload a saved menu.
 - Opening `?parse=real` without `MIMO_API_KEY` shows a friendly configuration failure.
 - Opening `?parse=real` with MiMo env vars configured can parse a real menu image through `/api/menus/parse`.
+- Opening `?parse=real&debug=1` posts the image to `/api/menus/parse?debug=1` and returns upload metadata without calling MiMo.
 - Desktop and mobile widths do not show broken layout or horizontal overflow.
 
 Real parsing sends uploaded images to MiMo and may incur provider cost. Use non-sensitive test images unless your deployment and provider account are approved for the image content you upload.
@@ -92,9 +95,9 @@ Real parsing sends uploaded images to MiMo and may incur provider cost. Use non-
 
 ## Real MiMo Parser
 
-The Vercel route `POST /api/menus/parse` accepts multipart image uploads from the `images` field. It rejects non-image files, enforces the same 10MB per-file limit as the frontend, converts images to data URLs, calls MiMo server-side, and sanitizes the model output into the app's `Menu` type.
+The Vercel route `POST /api/menus/parse` accepts multipart image uploads from the `images` field. During debugging it also accepts `files` as a temporary compatibility field. It rejects non-image files, enforces the same 10MB per-file limit as the frontend, converts images to data URLs, calls MiMo server-side, and sanitizes the model output into the app's `Menu` type.
 
-API keys must stay server-side only in `MIMO_API_KEY`. Mock mode remains the default even when MiMo is configured.
+API keys must stay server-side only in `MIMO_API_KEY`. Mock mode remains the default even when MiMo is configured. Real image parsing requires a MiMo model that supports image understanding; the default is `mimo-v2.5`.
 
 The parser is implemented as a Vercel Node.js Serverless Function, not an Edge Function. `vercel.json` sets `/api/menus/parse` to a 30-second maximum duration, and the MiMo provider call has an app-level timeout of about 20 seconds so the API can return structured JSON before Vercel stops the function:
 
@@ -102,7 +105,20 @@ The parser is implemented as a Vercel Node.js Serverless Function, not an Edge F
 {
   "ok": false,
   "code": "MIMO_TIMEOUT",
-  "error": "Menu parsing timed out. Please try a clearer or smaller image."
+  "error": "Menu parsing timed out. Please try again with a clearer image."
+}
+```
+
+Debug mode is safe to keep temporarily because it returns only upload metadata:
+
+```json
+{
+  "ok": true,
+  "debug": {
+    "imageCount": 1,
+    "totalBytes": 12345,
+    "fileTypes": ["image/jpeg"]
+  }
 }
 ```
 
@@ -115,8 +131,11 @@ This means Vercel stopped the function because it did not return in time. For re
 The app now uses a Node.js function plus an app-level MiMo timeout so slow provider responses should return `MIMO_TIMEOUT` JSON before Vercel's platform timeout. If you still see a platform 504:
 
 - Upload one smaller, clearer image and retry.
-- Check Vercel function logs for `request_start`, `images_received`, `mimo_response_status`, `mimo_timeout`, or `parse_failed`.
+- Check Vercel function logs for `route_start`, `method_checked`, `content_type_checked`, `formdata_start`, `formdata_done`, `images_extracted`, `image_conversion_start`, `image_conversion_done`, `mimo_request_start`, `mimo_response_status`, `sanitize_start`, `sanitize_done`, `route_success`, or `route_error`.
+- For upload parsing specifically, open the app with `?parse=real&debug=1` and confirm `/api/menus/parse?debug=1` returns `imageCount`, `totalBytes`, and `fileTypes`.
 - Check MiMo service latency and model availability.
+- Confirm the selected `MIMO_MODEL` supports image understanding.
+- Confirm you are using a pay-as-you-go `sk-xxxxx` key with `https://api.xiaomimimo.com/v1`, not Token Plan credentials/base URLs.
 - Try a faster/smaller model through `MIMO_MODEL` if available.
 - Confirm the deployed build includes the latest Node function changes.
 

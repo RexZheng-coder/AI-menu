@@ -11,6 +11,8 @@ export type ParseMenuErrorCode =
   | "provider_failure"
   | "invalid_request"
   | "mimo_timeout"
+  | "mimo_api_error"
+  | "unsupported_model"
   | "unknown";
 
 export class ParseMenuError extends Error {

@@ -1,8 +1,10 @@
-import { parseUploadedMenuFilesOnServer } from "../../src/server/menuParseHandler.js";
-import type { ServerUploadedImageFile } from "../../src/server/menuImageInput.js";
+import { parseMenuImagesOnServer } from "../../src/server/menuParseHandler.js";
+import { createServerMenuImages, type ServerUploadedImageFile } from "../../src/server/menuImageInput.js";
 
 const maxUploadSizeBytes = 10 * 1024 * 1024;
 const maxTotalUploadSizeBytes = 32 * 1024 * 1024;
+const handlerTimeoutMs = 23_000;
+const formDataTimeoutMs = 5_000;
 const acceptedImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const acceptedImageExtensions = [".jpg", ".jpeg", ".png", ".webp"];
 
@@ -15,8 +17,13 @@ type ApiErrorCode =
   | "UNSUPPORTED_FILE_TYPE"
   | "FILE_TOO_LARGE"
   | "MIMO_TIMEOUT"
+  | "MIMO_API_ERROR"
+  | "MIMO_UNSUPPORTED_MODEL"
   | "MIMO_PARSE_FAILED"
-  | "SERVER_CONFIG";
+  | "SERVER_CONFIG"
+  | "EMPTY_MENU"
+  | "FORMDATA_TIMEOUT"
+  | "ROUTE_TIMEOUT";
 
 type ApiErrorBody = {
   ok: false;
@@ -26,6 +33,7 @@ type ApiErrorBody = {
 
 type NodeRequest = {
   method?: string;
+  url?: string;
   headers: Record<string, string | string[] | undefined>;
   on(event: "data", listener: (chunk: Uint8Array | string) => void): void;
   on(event: "end", listener: () => void): void;
@@ -57,83 +65,140 @@ type RequestLogMeta = {
 
 export default async function handler(request: NodeRequest, response: NodeResponse): Promise<void> {
   const logMeta = createRequestLogMeta();
-  logInfo(logMeta, "request_start", {
+  const responder = createSafeResponder(response, logMeta);
+  const routeTimeoutId = setTimeout(() => {
+    responder.sendError(
+      "ROUTE_TIMEOUT",
+      "Menu parsing took too long. Please try again with a smaller or clearer image.",
+      504,
+    );
+  }, handlerTimeoutMs);
+
+  logInfo(logMeta, "route_start", {
     method: request.method ?? "UNKNOWN",
   });
 
-  if (request.method !== "POST") {
-    logWarn(logMeta, "request_rejected", { code: "METHOD_NOT_ALLOWED" });
-    writeError(response, "METHOD_NOT_ALLOWED", "Only POST requests are supported for menu parsing.", 405, {
-      Allow: "POST",
+  try {
+    logInfo(logMeta, "method_checked", {
+      ok: request.method === "POST",
     });
-    return;
-  }
 
-  const contentType = getHeader(request, "content-type");
+    if (request.method !== "POST") {
+      responder.sendError("METHOD_NOT_ALLOWED", "Only POST requests are supported for menu parsing.", 405, {
+        Allow: "POST",
+      });
+      return;
+    }
 
-  if (!contentType.toLowerCase().includes("multipart/form-data")) {
-    logWarn(logMeta, "request_rejected", { code: "INVALID_CONTENT_TYPE" });
-    writeError(
-      response,
-      "INVALID_CONTENT_TYPE",
-      "Menu parsing expects multipart/form-data with image files in the images field.",
-      415,
-    );
-    return;
-  }
+    const contentType = getHeader(request, "content-type");
+    const hasMultipartContentType = contentType.toLowerCase().includes("multipart/form-data");
 
-  const boundary = getMultipartBoundary(contentType);
+    logInfo(logMeta, "content_type_checked", {
+      ok: hasMultipartContentType,
+      hasBoundary: getMultipartBoundary(contentType) !== null,
+    });
 
-  if (!boundary) {
-    logWarn(logMeta, "request_rejected", { code: "INVALID_FORM_DATA" });
-    writeError(response, "INVALID_FORM_DATA", "Could not read the multipart upload boundary.", 400);
-    return;
-  }
+    if (!hasMultipartContentType) {
+      responder.sendError(
+        "INVALID_CONTENT_TYPE",
+        "Menu parsing expects multipart/form-data with image files in the images field.",
+        415,
+      );
+      return;
+    }
 
-  const bodyResult = await readRequestBody(request, maxTotalUploadSizeBytes);
+    const boundary = getMultipartBoundary(contentType);
 
-  if (!bodyResult.ok) {
-    logWarn(logMeta, "request_rejected", { code: bodyResult.code });
-    writeError(response, bodyResult.code, bodyResult.error, bodyResult.status);
-    return;
-  }
+    if (!boundary) {
+      responder.sendError("INVALID_FORM_DATA", "Could not read the multipart upload boundary.", 400);
+      return;
+    }
 
-  const filesResult = getUploadedImageFiles(parseMultipartFiles(bodyResult.body, boundary));
+    logInfo(logMeta, "formdata_start", {
+      timeoutMs: formDataTimeoutMs,
+    });
+    const bodyResult = await readRequestBodyWithTimeout(request, maxTotalUploadSizeBytes, formDataTimeoutMs);
 
-  if (!filesResult.ok) {
-    logWarn(logMeta, "request_rejected", { code: filesResult.code });
-    writeError(response, filesResult.code, filesResult.error, filesResult.status);
-    return;
-  }
+    if (!bodyResult.ok) {
+      responder.sendError(bodyResult.code, bodyResult.error, bodyResult.status);
+      return;
+    }
 
-  logInfo(logMeta, "images_received", {
-    imageCount: filesResult.files.length,
-    totalBytes: filesResult.files.reduce((sum, file) => sum + file.size, 0),
-  });
+    const parsedFiles = parseMultipartFiles(bodyResult.body, boundary);
+    logInfo(logMeta, "formdata_done", {
+      filePartCount: parsedFiles.length,
+      totalBodyBytes: bodyResult.body.byteLength,
+    });
 
-  const parseResponse = await parseUploadedMenuFilesOnServer(filesResult.files);
+    const filesResult = getUploadedImageFiles(parsedFiles);
 
-  if (!parseResponse.ok) {
-    const errorCode = getParserErrorCode(parseResponse.error);
-    const status = getParserErrorStatus(errorCode);
+    if (!filesResult.ok) {
+      responder.sendError(filesResult.code, filesResult.error, filesResult.status);
+      return;
+    }
 
-    logWarn(logMeta, "parse_failed", {
-      code: errorCode,
+    const imageCount = filesResult.files.length;
+    const totalBytes = filesResult.files.reduce((sum, file) => sum + file.size, 0);
+    const fileTypes = filesResult.files.map((file) => file.type || inferContentType(file.name));
+
+    logInfo(logMeta, "images_extracted", {
+      imageCount,
+      totalBytes,
+      fileTypes,
+    });
+
+    if (isDebugRequest(request)) {
+      logInfo(logMeta, "route_success", {
+        debug: true,
+        elapsedMs: Date.now() - logMeta.startedAt,
+      });
+      responder.sendJson({
+        ok: true,
+        debug: {
+          imageCount,
+          totalBytes,
+          fileTypes,
+        },
+      });
+      return;
+    }
+
+    logInfo(logMeta, "image_conversion_start", {
+      imageCount,
+      totalBytes,
+    });
+    const images = await createServerMenuImages(filesResult.files);
+    logInfo(logMeta, "image_conversion_done", {
+      imageCount: images.length,
+    });
+
+    const parseResponse = await parseMenuImagesOnServer({ images });
+
+    if (!parseResponse.ok) {
+      const errorCode = normalizeParserErrorCode(parseResponse.code, parseResponse.error);
+      const status = parseResponse.status ?? getParserErrorStatus(errorCode);
+
+      responder.sendError(errorCode, getParserErrorMessage(errorCode, parseResponse.error), status);
+      return;
+    }
+
+    logInfo(logMeta, "route_success", {
       elapsedMs: Date.now() - logMeta.startedAt,
+      categoryCount: parseResponse.menu.categories.length,
     });
-    writeError(response, errorCode, getParserErrorMessage(errorCode, parseResponse.error), status);
-    return;
+    responder.sendJson({
+      ok: true,
+      menu: parseResponse.menu,
+    });
+  } catch (error) {
+    responder.sendError(
+      "MIMO_PARSE_FAILED",
+      error instanceof Error ? error.message : "Menu parsing failed. Please try again.",
+      500,
+    );
+  } finally {
+    clearTimeout(routeTimeoutId);
   }
-
-  logInfo(logMeta, "parse_completed", {
-    elapsedMs: Date.now() - logMeta.startedAt,
-    categoryCount: parseResponse.menu.categories.length,
-  });
-
-  writeJson(response, {
-    ok: true,
-    menu: parseResponse.menu,
-  });
 }
 
 function getUploadedImageFiles(
@@ -149,7 +214,7 @@ function getUploadedImageFiles(
       error: string;
       status: number;
     } {
-  const imageFiles = files.filter((file) => file.fieldName === "images");
+  const imageFiles = files.filter((file) => file.fieldName === "images" || file.fieldName === "files");
 
   if (imageFiles.length === 0) {
     return {
@@ -165,7 +230,7 @@ function getUploadedImageFiles(
       return {
         ok: false,
         code: "INVALID_FILE_FIELD",
-        error: "The images field must contain named image files.",
+        error: "The images or files field must contain named image files.",
         status: 400,
       };
     }
@@ -175,7 +240,7 @@ function getUploadedImageFiles(
         ok: false,
         code: "UNSUPPORTED_FILE_TYPE",
         error: `Only JPG, PNG, and WebP images are supported. Rejected: ${file.name || "unnamed file"}.`,
-        status: 415,
+        status: 400,
       };
     }
 
@@ -284,9 +349,55 @@ function isAcceptedImageFile(file: MultipartFile): boolean {
   );
 }
 
+function inferContentType(fileName: string): string {
+  const lowerName = fileName.toLowerCase();
+
+  if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg")) {
+    return "image/jpeg";
+  }
+
+  if (lowerName.endsWith(".webp")) {
+    return "image/webp";
+  }
+
+  return "image/png";
+}
+
 function getHeader(request: NodeRequest, name: string): string {
   const value = request.headers[name] ?? request.headers[name.toLowerCase()];
   return Array.isArray(value) ? value.join(", ") : value ?? "";
+}
+
+function readRequestBodyWithTimeout(
+  request: NodeRequest,
+  maxSizeBytes: number,
+  timeoutMs: number,
+): Promise<
+  | {
+      ok: true;
+      body: Uint8Array;
+    }
+  | {
+      ok: false;
+      code: ApiErrorCode;
+      error: string;
+      status: number;
+    }
+> {
+  return new Promise((resolve) => {
+    const timeoutId = setTimeout(() => {
+      resolve({
+        ok: false,
+        code: "FORMDATA_TIMEOUT",
+        error: "Reading uploaded images timed out. Please try fewer or smaller images.",
+        status: 408,
+      });
+    }, timeoutMs);
+
+    readRequestBody(request, maxSizeBytes)
+      .then(resolve)
+      .finally(() => clearTimeout(timeoutId));
+  });
 }
 
 function readRequestBody(
@@ -391,7 +502,19 @@ function binaryStringToBytes(value: string): Uint8Array {
   return bytes;
 }
 
-function getParserErrorCode(error: string): ApiErrorCode {
+function normalizeParserErrorCode(code: string | undefined, error: string): ApiErrorCode {
+  switch (code) {
+    case "SERVER_CONFIG":
+    case "MIMO_TIMEOUT":
+    case "MIMO_API_ERROR":
+    case "MIMO_UNSUPPORTED_MODEL":
+    case "MIMO_PARSE_FAILED":
+    case "EMPTY_MENU":
+      return code;
+    default:
+      break;
+  }
+
   if (error.includes("MIMO_TIMEOUT")) {
     return "MIMO_TIMEOUT";
   }
@@ -405,7 +528,7 @@ function getParserErrorCode(error: string): ApiErrorCode {
 
 function getParserErrorMessage(code: ApiErrorCode, fallback: string): string {
   if (code === "MIMO_TIMEOUT") {
-    return "Menu parsing timed out. Please try a clearer or smaller image.";
+    return "Menu parsing timed out. Please try again with a clearer image.";
   }
 
   return fallback;
@@ -420,39 +543,78 @@ function getParserErrorStatus(code: ApiErrorCode): number {
     return 503;
   }
 
+  if (code === "MIMO_UNSUPPORTED_MODEL") {
+    return 400;
+  }
+
+  if (code === "MIMO_API_ERROR") {
+    return 502;
+  }
+
+  if (code === "EMPTY_MENU") {
+    return 422;
+  }
+
   return 502;
 }
 
-function writeError(
-  response: NodeResponse,
-  code: ApiErrorCode,
-  error: string,
-  status: number,
-  headers: Record<string, string> = {},
-): void {
-  const body: ApiErrorBody = {
-    ok: false,
-    code,
-    error,
-  };
-
-  writeJson(response, body, status, headers);
+function isDebugRequest(request: NodeRequest): boolean {
+  const url = new URL(request.url ?? "/api/menus/parse", "https://ai-menu.local");
+  return url.searchParams.get("debug") === "1";
 }
 
-function writeJson(
-  response: NodeResponse,
-  body: unknown,
-  status = 200,
-  headers: Record<string, string> = {},
-): void {
-  response.status(status);
-  response.setHeader("Content-Type", "application/json");
+function createSafeResponder(response: NodeResponse, logMeta: RequestLogMeta): {
+  sendJson: (body: unknown, status?: number, headers?: Record<string, string>) => boolean;
+  sendError: (code: ApiErrorCode, error: string, status: number, headers?: Record<string, string>) => boolean;
+} {
+  let hasResponded = false;
 
-  for (const [name, value] of Object.entries(headers)) {
-    response.setHeader(name, value);
+  function sendJson(body: unknown, status = 200, headers: Record<string, string> = {}): boolean {
+    if (hasResponded) {
+      return false;
+    }
+
+    hasResponded = true;
+    response.status(status);
+    response.setHeader("Content-Type", "application/json");
+
+    for (const [name, value] of Object.entries(headers)) {
+      response.setHeader(name, value);
+    }
+
+    response.json(body);
+    return true;
   }
 
-  response.json(body);
+  function sendError(
+    code: ApiErrorCode,
+    error: string,
+    status: number,
+    headers: Record<string, string> = {},
+  ): boolean {
+    if (hasResponded) {
+      return false;
+    }
+
+    logWarn(logMeta, "route_error", {
+      code,
+      status,
+      elapsedMs: Date.now() - logMeta.startedAt,
+    });
+
+    const body: ApiErrorBody = {
+      ok: false,
+      code,
+      error,
+    };
+
+    return sendJson(body, status, headers);
+  }
+
+  return {
+    sendJson,
+    sendError,
+  };
 }
 
 function createRequestLogMeta(): RequestLogMeta {
