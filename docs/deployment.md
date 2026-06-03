@@ -1,6 +1,6 @@
 # Deployment
 
-This is currently a frontend-only static MVP. The deployed app defaults to mock parsing mode and does not require API keys.
+This is a static-first MVP. The deployed app defaults to mock parsing mode and does not require API keys unless real MiMo parsing is enabled with `?parse=real`.
 
 ## Deployment Checklist
 
@@ -22,15 +22,27 @@ Use the included `vercel.json`.
 - Build command: `npm run build`
 - Output directory: `dist`
 - Framework preset: Other/static
-- Environment variables: none required for the current mock/static MVP
+- Environment variables: none required for mock mode
+- Environment variables for real MiMo mode: `MIMO_API_KEY`, `MIMO_BASE_URL`, `MIMO_MODEL`
 
 Recommended flow:
 
 1. Import the repository into Vercel.
 2. Confirm the build command is `npm run build`.
 3. Confirm the output directory is `dist`.
-4. Deploy.
-5. Run the post-deployment smoke test checklist.
+4. For real parsing, add the MiMo environment variables below in Vercel Project Settings.
+5. Deploy.
+6. Run the post-deployment smoke test checklist.
+
+Server-side MiMo variables:
+
+```text
+MIMO_API_KEY=your-server-side-key
+MIMO_BASE_URL=https://api.xiaomimimo.com/v1
+MIMO_MODEL=mimo-v2.5
+```
+
+Do not prefix these with frontend/public env names. They must stay server-side only.
 
 ## Deploy To Netlify
 
@@ -62,8 +74,11 @@ Run this against the deployed URL:
 - Item notes are retained in the cart.
 - Order summary generates bilingual display text.
 - Recent menu history appears after parsing and can reload a saved menu.
-- Opening `?parse=real` shows a friendly backend-not-ready failure state.
+- Opening `?parse=real` without `MIMO_API_KEY` shows a friendly configuration failure.
+- Opening `?parse=real` with MiMo env vars configured can parse a real menu image through `/api/menus/parse`.
 - Desktop and mobile widths do not show broken layout or horizontal overflow.
+
+Real parsing sends uploaded images to MiMo and may incur provider cost. Use non-sensitive test images unless your deployment and provider account are approved for the image content you upload.
 
 ## What Works In The Static MVP
 
@@ -73,10 +88,14 @@ Run this against the deployed URL:
 - Cart quantities, notes, totals, and order summary
 - Local menu history with `localStorage`
 - Friendly errors and retry states
+- Optional Vercel serverless MiMo parser via `?parse=real`
 
-## What Requires A Future Backend
+## Real MiMo Parser
 
-Real AI/OCR parsing requires a server route such as `POST /api/menus/parse`.
-API keys must stay server-side only, for example in `AI_MENU_OPENAI_API_KEY`.
+The Vercel route `POST /api/menus/parse` accepts multipart image uploads from the `images` field. It rejects non-image files, enforces the same 10MB per-file limit as the frontend, converts images to data URLs, calls MiMo server-side, and sanitizes the model output into the app's `Menu` type.
 
-If the deployed static app is opened with `?parse=real` before that backend exists, it should show a friendly error instead of silently returning mock data.
+API keys must stay server-side only in `MIMO_API_KEY`. Mock mode remains the default even when MiMo is configured.
+
+## Netlify Limitation
+
+The current real parser route is implemented for Vercel serverless functions. Netlify deployment remains suitable for the mock/static MVP unless an equivalent Netlify function is added later.

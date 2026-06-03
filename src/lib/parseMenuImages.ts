@@ -73,6 +73,16 @@ async function parseWithBackend(files: File[]): Promise<Menu> {
   });
 
   if (!response.ok) {
+    const errorBody = await readOptionalJsonResponse(response);
+    const errorMessage = asString(errorBody.error);
+
+    if (errorMessage) {
+      throw new ParseMenuError(
+        getBackendErrorCode(asString(errorBody.code), response.status),
+        errorMessage,
+      );
+    }
+
     throw response.status === 404 || response.status === 405 || response.status === 501
       ? new ParseMenuError(
           "missing_backend",
@@ -81,17 +91,14 @@ async function parseWithBackend(files: File[]): Promise<Menu> {
       : new ParseMenuError("unknown", "Menu parsing failed. Please try again.");
   }
 
-  const body = await response.json().catch((error: unknown) => {
-    throw new ParseMenuError(
-      "invalid_json",
-      "The parser returned data we could not read. Please retry the scan.",
-      { cause: error },
-    );
-  }) as unknown;
+  const body = await readJsonResponse(response);
   const parsedBody = asRecord(body);
 
   if (parsedBody.ok === false) {
-    throw new ParseMenuError("unknown", asString(parsedBody.error) ?? "Menu parsing failed. Please try again.");
+    throw new ParseMenuError(
+      getBackendErrorCode(asString(parsedBody.code), response.status),
+      asString(parsedBody.error) ?? "Menu parsing failed. Please try again.",
+    );
   }
 
   return ensureMenuCanRender(
@@ -122,6 +129,50 @@ function asRecord(input: unknown): Record<string, unknown> {
 
 function asString(input: unknown): string | undefined {
   return typeof input === "string" && input.trim().length > 0 ? input.trim() : undefined;
+}
+
+async function readOptionalJsonResponse(response: Response): Promise<Record<string, unknown>> {
+  if (!response.headers.get("content-type")?.toLowerCase().includes("application/json")) {
+    return {};
+  }
+
+  return readJsonResponse(response);
+}
+
+async function readJsonResponse(response: Response): Promise<Record<string, unknown>> {
+  const body = await response.json().catch((error: unknown) => {
+    throw new ParseMenuError(
+      "invalid_json",
+      "The parser returned data we could not read. Please retry the scan.",
+      { cause: error },
+    );
+  }) as unknown;
+
+  return asRecord(body);
+}
+
+function getBackendErrorCode(code: string | undefined, status: number): ParseMenuError["code"] {
+  if (code === "no_images") {
+    return "no_files";
+  }
+
+  if (code === "unsupported_file_type") {
+    return "unsupported_file_type";
+  }
+
+  if (code === "file_too_large") {
+    return "file_too_large";
+  }
+
+  if (code === "mimo_parse_failed") {
+    return status === 503 ? "server_config" : "provider_failure";
+  }
+
+  if (code === "invalid_content_type" || code === "invalid_form_data" || code === "invalid_file_field") {
+    return "invalid_request";
+  }
+
+  return "unknown";
 }
 
 function ensureMenuCanRender(menu: Menu): Menu {

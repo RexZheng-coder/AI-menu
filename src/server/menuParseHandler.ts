@@ -1,5 +1,6 @@
-import { parseMenuWithOpenAI, type ServerMenuImage } from "./openAiMenuParser.js";
-import { createServerMenuImages, type ServerUploadedImageFile } from "./menuImageInput.js";
+import { validateMenuHasItems } from "../lib/menuValidation.js";
+import { createServerMenuImages, type ServerMenuImage, type ServerUploadedImageFile } from "./menuImageInput.js";
+import { parseMenuWithMiMo } from "./mimoMenuParser.js";
 import type { Menu } from "../types/menu.js";
 
 export type ParseMenuRequest = {
@@ -18,9 +19,19 @@ export type ParseMenuResponse =
 
 export async function parseMenuImagesOnServer(request: ParseMenuRequest): Promise<ParseMenuResponse> {
   try {
+    const menu = await parseMenuWithMiMo(request.images);
+    const validationError = validateMenuHasItems(menu);
+
+    if (validationError) {
+      return {
+        ok: false,
+        error: validationError,
+      };
+    }
+
     return {
       ok: true,
-      menu: await parseMenuWithOpenAI(request.images),
+      menu,
     };
   } catch (error) {
     return {

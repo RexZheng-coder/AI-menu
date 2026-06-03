@@ -7,6 +7,9 @@ export type ParseMenuErrorCode =
   | "invalid_json"
   | "parse_timeout"
   | "empty_menu"
+  | "server_config"
+  | "provider_failure"
+  | "invalid_request"
   | "unknown";
 
 export class ParseMenuError extends Error {

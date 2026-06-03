@@ -6,7 +6,7 @@ Use this as a 30-60 second walkthrough for a portfolio demo.
 
 Restaurant menus can be hard to read when they are photographed, translated inconsistently, or written in an unfamiliar language. AI Menu Assistant is a static TypeScript MVP that demonstrates the customer-facing flow for turning menu photos into a bilingual ordering experience.
 
-First, I start from the upload screen and choose a menu image. In the current static deployment, the app uses a mock parsing layer, so the uploaded image returns a realistic prepared menu instead of calling a live AI backend.
+First, I start from the upload screen and choose a menu image. By default, the app uses a mock parsing layer, so the uploaded image returns a realistic prepared menu without spending API credits.
 
 The parsed result is displayed like a food ordering app: dishes are grouped by category, each item has English and Chinese names, Chinese descriptions, tags, spice level, price, and a subtle parse confidence score.
 
@@ -14,7 +14,7 @@ Then I add a few dishes to the cart, adjust quantities, add notes like "less spi
 
 The app also saves recent parsed menus in localStorage, so I can reload the page and reopen a previous menu without a database.
 
-For the next step, the frontend already has a `parseMenuImages` seam and server-side parser modules prepared. Real AI/OCR would be connected through a backend `POST /api/menus/parse` route so API keys stay server-side.
+For the real parsing path, the same frontend `parseMenuImages` seam can post to a Vercel serverless `POST /api/menus/parse` route with `?parse=real`. That route calls Xiaomi MiMo server-side, so API keys stay out of browser code.
 
 ## Demo Beats
 
@@ -25,8 +25,8 @@ For the next step, the frontend already has a `parseMenuImages` seam and server-
 5. Cart: add items, adjust quantities, and enter item notes.
 6. Summary: generate a bilingual waiter-ready order summary.
 7. History: reload or use `Recent Menus` to show localStorage persistence.
-8. Roadmap: real AI/OCR connects later through `POST /api/menus/parse`; frontend API keys are never exposed.
+8. Real parser: show that `?parse=real` uses the Vercel API route when MiMo env vars are configured; frontend API keys are never exposed.
 
 ## Real-Mode Note
 
-Opening the app with `?parse=real` demonstrates the future backend path. Until a backend route exists, it should show a friendly parse failure instead of silently falling back to mock AI behavior.
+Opening the app with `?parse=real` demonstrates the MiMo-backed route. If `MIMO_API_KEY` is not configured, it should show a friendly configuration failure instead of silently falling back to mock AI behavior.

@@ -1,4 +1,8 @@
-import type { ServerMenuImage } from "./openAiMenuParser.js";
+export type ServerMenuImage = {
+  name: string;
+  mimeType: string;
+  dataUrl: string;
+};
 
 export type ServerUploadedImageFile = {
   name: string;
