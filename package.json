@@ -6,6 +6,8 @@
   "scripts": {
     "build": "node scripts/build-static.mjs",
     "typecheck": "npx --yes -p typescript tsc --noEmit --pretty false",
+    "test:mimo:image": "node scripts/test-mimo-image.mjs",
+    "test:mimo:text": "node scripts/test-mimo-text.mjs",
     "preview": "python3 -m http.server 4173 -d dist",
     "start": "npm run preview"
   },
