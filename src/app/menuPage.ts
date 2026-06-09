@@ -7,6 +7,7 @@ import {
   createCartItemFromMenuItem,
   generateOrderSummary,
 } from "../lib/menuUtils.js";
+import { getMenuItemCount } from "../lib/menuValidation.js";
 import {
   clearSavedMenus,
   getSavedMenuById,
@@ -48,6 +49,7 @@ let savedMenus: SavedMenuRecord[] = getSavedMenus();
 let cartItems: CartItem[] = [];
 let orderSummary: OrderSummary | null = null;
 let cartPanelRoot: HTMLElement | null = null;
+let isCartOpen = false;
 
 renderApp(appRootElement);
 
@@ -76,6 +78,7 @@ function renderUpload(): HTMLElement {
     error: uploadError?.userMessage ?? null,
     parseState,
     hasMenu: currentMenu !== null,
+    isRealMode: isRealParseMode(),
     onFilesSelected: selectUploadFiles,
     onClearFiles: clearUploadFiles,
     onAnalyze: analyzeUploadedMenu,
@@ -90,7 +93,7 @@ function renderMenuPage(menu: Menu): HTMLElement {
 
   const menuColumn = document.createElement("div");
   menuColumn.className = "menu-column";
-  menuColumn.append(renderHeader(menu), renderCategoryList(menu));
+  menuColumn.append(renderHeader(menu), renderCategoryNav(menu), renderCategoryList(menu));
 
   cartPanelRoot = document.createElement("div");
   cartPanelRoot.className = "cart-column";
@@ -116,8 +119,46 @@ function renderHeader(menu: Menu): HTMLElement {
   meta.className = "menu-header__meta";
   meta.textContent = menu.restaurant.address ?? `${menu.language.source.toUpperCase()} to ${menu.language.target.toUpperCase()}`;
 
-  header.append(eyebrow, title, meta);
+  const stats = document.createElement("div");
+  stats.className = "menu-header__stats";
+  stats.append(
+    renderStat(`${menu.categories.length}`, menu.categories.length === 1 ? "category" : "categories"),
+    renderStat(`${getMenuItemCount(menu)}`, "items"),
+    renderStat(menu.metadata.source_type === "image_upload" ? "AI parsed" : "Demo menu", "source"),
+  );
+
+  header.append(eyebrow, title, meta, stats);
   return header;
+}
+
+function renderStat(value: string, label: string): HTMLElement {
+  const stat = document.createElement("span");
+  stat.className = "menu-header__stat";
+
+  const valueElement = document.createElement("strong");
+  valueElement.textContent = value;
+
+  const labelElement = document.createElement("span");
+  labelElement.textContent = label;
+
+  stat.append(valueElement, labelElement);
+  return stat;
+}
+
+function renderCategoryNav(menu: Menu): HTMLElement {
+  const nav = document.createElement("nav");
+  nav.className = "category-nav";
+  nav.setAttribute("aria-label", "Menu categories");
+
+  for (const category of menu.categories) {
+    const link = document.createElement("a");
+    link.className = "category-nav__link";
+    link.href = `#${category.category_id}-title`;
+    link.textContent = category.name_zh || category.name_en;
+    nav.append(link);
+  }
+
+  return nav;
 }
 
 function renderCategoryList(menu: Menu): HTMLElement {
@@ -247,6 +288,7 @@ function setCurrentMenu(menu: Menu): void {
   currentMenu = menu;
   cartItems = [];
   orderSummary = null;
+  isCartOpen = false;
 }
 
 function replaceUploadFiles(files: File[]): void {
@@ -381,9 +423,12 @@ function renderCart(): void {
     return;
   }
 
+  const cart = createCart();
+  cartPanelRoot.className = `cart-column${isCartOpen ? " cart-column--open" : ""}`;
   cartPanelRoot.replaceChildren(
+    renderMobileCartToggle(cart),
     renderCartPanel({
-      cart: createCart(),
+      cart,
       orderSummary,
       onIncrease: increaseCartItem,
       onDecrease: decreaseCartItem,
@@ -392,6 +437,41 @@ function renderCart(): void {
       onGenerateSummary: createOrderSummary,
     }),
   );
+}
+
+function renderMobileCartToggle(cart: Cart): HTMLElement {
+  const button = document.createElement("button");
+  button.className = "mobile-cart-toggle";
+  button.type = "button";
+  button.setAttribute("aria-expanded", String(isCartOpen));
+  button.setAttribute("aria-controls", "cart-panel");
+  button.addEventListener("click", () => {
+    isCartOpen = !isCartOpen;
+    renderCart();
+  });
+
+  const count = document.createElement("span");
+  count.className = "mobile-cart-toggle__count";
+  const itemCount = cart.items.reduce((sum, item) => sum + item.quantity, 0);
+  count.textContent = `${itemCount} ${itemCount === 1 ? "item" : "items"}`;
+
+  const label = document.createElement("span");
+  label.className = "mobile-cart-toggle__label";
+  label.textContent = isCartOpen ? "Hide cart" : "View cart";
+
+  const total = document.createElement("strong");
+  total.className = "mobile-cart-toggle__total";
+  total.textContent = formatCartTotal(cart);
+
+  button.append(count, label, total);
+  return button;
+}
+
+function formatCartTotal(cart: Cart): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: cart.total.currency,
+  }).format(cart.total.estimated_total);
 }
 
 function createCart(): Cart {
@@ -452,6 +532,11 @@ function getParseTimeoutMs(): number {
   const timeoutMs = Number(params.get("parseTimeoutMs"));
 
   return Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : defaultParseTimeoutMs;
+}
+
+function isRealParseMode(): boolean {
+  const params = new URLSearchParams(window.location.search);
+  return params.get("parse") === "real" || params.get("ai") === "1";
 }
 
 function logParseError(error: ParseMenuError): void {

@@ -12,6 +12,7 @@ type CartPanelProps = {
 
 export function renderCartPanel(props: CartPanelProps): HTMLElement {
   const panel = document.createElement("aside");
+  panel.id = "cart-panel";
   panel.className = "cart-panel";
   panel.setAttribute("aria-label", "Cart and order summary");
 

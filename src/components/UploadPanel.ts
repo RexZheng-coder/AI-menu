@@ -8,6 +8,7 @@ type UploadPanelProps = {
   error: string | null;
   parseState: "idle" | "validating_files" | "uploading" | "parsing" | "success" | "error";
   hasMenu: boolean;
+  isRealMode: boolean;
   onFilesSelected: (files: File[]) => void;
   onClearFiles: () => void;
   onAnalyze: () => void;
@@ -33,11 +34,15 @@ export function renderUploadPanel(props: UploadPanelProps): HTMLElement {
 
   const description = document.createElement("p");
   description.className = "upload-panel__description";
-  description.textContent = "Choose JPG, PNG, or WebP menu images. This step currently uses a mock parser so the frontend can be wired before real AI/OCR.";
+  description.textContent = props.isRealMode
+    ? "Choose JPG, PNG, or WebP menu images. Real AI parsing runs through the secure local API route."
+    : "Choose JPG, PNG, or WebP menu images. Mock mode returns the sample parsed menu for fast UI testing.";
 
   const modeLabel = document.createElement("p");
   modeLabel.className = "upload-panel__mode";
-  modeLabel.textContent = "Mock Demo Mode: uploaded images return the sample parsed menu in static deployment.";
+  modeLabel.textContent = props.isRealMode
+    ? "Real AI Mode: uploaded images are parsed by MiMo through the backend."
+    : "Mock Demo Mode: uploaded images return the sample parsed menu.";
 
   copy.append(eyebrow, title, description, modeLabel);
 
