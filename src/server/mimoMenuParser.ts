@@ -47,7 +47,7 @@ type LightweightMenuItem = {
 
 const defaultBaseUrl = "https://api.xiaomimimo.com/v1";
 const defaultModel = "mimo-v2.5";
-const defaultTimeoutMs = 20_000;
+const defaultTimeoutMs = 24_000;
 const imageCapableModels = new Set(["mimo-v2.5", "mimo-v2-omni"]);
 
 export type MiMoParserErrorCode =
@@ -375,7 +375,9 @@ function createMenuFromLightweightExtraction(
   },
 ): Record<string, unknown> {
   const restaurantName = extraction.restaurant_name ?? "Parsed Menu";
-  const menuSlug = slugify(restaurantName);
+  const menuSlug = extraction.restaurant_name
+    ? slugify(extraction.restaurant_name)
+    : slugify(options.imageUrls[0] ?? "parsed_menu");
 
   return {
     menu_id: `menu_${menuSlug}`,
