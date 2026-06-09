@@ -40,6 +40,7 @@ Server-side MiMo variables:
 MIMO_API_KEY=sk-your-pay-as-you-go-key
 MIMO_BASE_URL=https://api.xiaomimimo.com/v1
 MIMO_MODEL=mimo-v2.5
+MIMO_PARSE_STRATEGY=ocr_first
 ```
 
 Do not prefix these with frontend/public env names. They must stay server-side only.
@@ -99,7 +100,9 @@ The Vercel route `POST /api/menus/parse` accepts multipart image uploads from th
 
 API keys must stay server-side only in `MIMO_API_KEY`. Mock mode remains the default even when MiMo is configured. Real image parsing requires a MiMo model that supports image understanding; the default is `mimo-v2.5`.
 
-The parser is implemented as a Vercel Node.js Serverless Function, not an Edge Function. `vercel.json` sets `/api/menus/parse` to a 30-second maximum duration, and the MiMo provider call has an app-level timeout of about 20 seconds so the API can return structured JSON before Vercel stops the function:
+Real parsing supports `MIMO_PARSE_STRATEGY=ocr_first` or `MIMO_PARSE_STRATEGY=vision`. OCR-first is the default: MiMo extracts visible menu text first, then a text-only MiMo pass converts that text into lightweight menu JSON. This separation is usually faster and more stable than asking the vision model to read images and emit full structured menu data in one call. The old direct vision parser remains available as `vision` and is also used as a safe fallback for OCR-first failures that are not configuration, unsupported-model, or timeout errors.
+
+The parser is implemented as a Vercel Node.js Serverless Function, not an Edge Function. `vercel.json` sets `/api/menus/parse` to a 30-second maximum duration, and the route has an app-level timeout so the API can return structured JSON before Vercel stops the function:
 
 ```json
 {
@@ -131,12 +134,13 @@ This means Vercel stopped the function because it did not return in time. For re
 The app now uses a Node.js function plus an app-level MiMo timeout so slow provider responses should return `MIMO_TIMEOUT` JSON before Vercel's platform timeout. If you still see a platform 504:
 
 - Upload one smaller, clearer image and retry.
-- Check Vercel function logs for `route_start`, `method_checked`, `content_type_checked`, `formdata_start`, `formdata_done`, `images_extracted`, `image_conversion_start`, `image_conversion_done`, `mimo_request_start`, `mimo_response_status`, `sanitize_start`, `sanitize_done`, `route_success`, or `route_error`.
+- Check Vercel function logs for `route_start`, `method_checked`, `content_type_checked`, `formdata_start`, `formdata_done`, `images_extracted`, `image_conversion_start`, `image_conversion_done`, `parse_strategy`, `ocr_start`, `ocr_done`, `structure_start`, `structure_done`, `fallback_to_vision`, `mimo_request_start`, `mimo_response_status`, `sanitize_start`, `sanitize_done`, `route_success`, or `route_error`.
 - For upload parsing specifically, open the app with `?parse=real&debug=1` and confirm `/api/menus/parse?debug=1` returns `imageCount`, `totalBytes`, and `fileTypes`.
 - Check MiMo service latency and model availability.
 - Confirm the selected `MIMO_MODEL` supports image understanding.
 - Confirm you are using a pay-as-you-go `sk-xxxxx` key with `https://api.xiaomimimo.com/v1`, not Token Plan credentials/base URLs.
 - Try a faster/smaller model through `MIMO_MODEL` if available.
+- Try `MIMO_PARSE_STRATEGY=vision` if OCR-first repeatedly misses text on a specific menu.
 - Confirm the deployed build includes the latest Node function changes.
 
 ## Netlify Limitation
