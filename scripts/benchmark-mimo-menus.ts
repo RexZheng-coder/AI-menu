@@ -1,13 +1,12 @@
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { extname } from "node:path";
 
-const imagePath = process.argv.slice(2).find((argument) => !argument.startsWith("--"));
-const parseDetail = readParseDetailArg();
-
-if (!imagePath) {
-  console.error('Usage: npm run test:mimo:menu -- "sample menu/menu.jpg"');
-  process.exit(1);
-}
+const sampleFiles = [
+  "sample menu/menu.jpg",
+  "sample menu/english-dense-menu.jpg",
+  "sample menu/drinks-menu.jpg",
+  "sample menu/chinese-menu.jpg",
+];
 
 await loadLocalEnv();
 
@@ -16,59 +15,74 @@ if (!process.env.MIMO_API_KEY) {
   process.exit(1);
 }
 
+const detail = readParseDetailArg();
+process.env.MENU_PARSE_DETAIL = detail;
+
 const { createServerMenuImage } = await import("../src/server/menuImageInput.js");
-const { getLastMiMoMenuParseDiagnostics, parseMenuWithMiMo } = await import("../src/server/mimoMenuParser.js");
 const { getLastMiMoChatDiagnostics } = await import("../src/server/mimoChatClient.js");
+const { getLastMiMoMenuParseDiagnostics, parseMenuWithMiMo } = await import("../src/server/mimoMenuParser.js");
 
-process.env.MENU_PARSE_DETAIL = parseDetail;
+type BenchmarkRow = {
+  file: string;
+  detail: string;
+  duration_ms: number;
+  restaurant: string;
+  categories: number | string;
+  items: number | string;
+  finish_reason: string;
+  recovered_from_truncation: string;
+  error_code: string;
+};
 
-const bytes = await readFile(imagePath);
-const image = await createServerMenuImage({
-  name: imagePath,
-  type: inferMimeType(imagePath, bytes),
-  arrayBuffer: async () => toArrayBuffer(bytes),
-});
-const startedAt = Date.now();
+const rows: BenchmarkRow[] = [];
 
-try {
-  const menu = await parseMenuWithMiMo([image]);
-  const itemCount = menu.categories.reduce((sum, category) => sum + category.items.length, 0);
-  const diagnostics = getLastMiMoChatDiagnostics();
+for (const file of sampleFiles) {
+  if (!(await fileExists(file))) {
+    continue;
+  }
 
-  console.log("status: OK");
-  console.log(`mode: ${parseDetail}`);
-  console.log("provider: mimo");
-  console.log(`model: ${diagnostics?.model ?? process.env.MIMO_MODEL ?? "mimo-v2.5"}`);
-  console.log(`original_bytes: ${image.originalByteLength}`);
-  console.log(`optimized_bytes: ${image.optimizedByteLength}`);
-  console.log(`optimization: ${image.optimization}`);
-  console.log(`image_sha256_prefix: ${image.sha256.slice(0, 16)}`);
-  console.log(`duration_ms: ${Date.now() - startedAt}`);
-  console.log(`finish_reason: ${diagnostics?.finishReason ?? "unknown"}`);
-  console.log(`content_length: ${diagnostics?.outputLength ?? 0}`);
-  console.log(`recovered_from_truncation: ${getLastMiMoMenuParseDiagnostics()?.recoveredFromTruncation ?? false}`);
-  console.log(`retry_count: ${getLastMiMoMenuParseDiagnostics()?.retryCount ?? 0}`);
-  console.log(`restaurant: ${menu.restaurant.name}`);
-  console.log(`categories: ${menu.categories.length}`);
-  console.log(`items: ${itemCount}`);
-} catch (error) {
-  const diagnostics = getLastMiMoChatDiagnostics();
+  const startedAt = Date.now();
 
-  console.log("status: ERROR");
-  console.log(`mode: ${parseDetail}`);
-  console.log("provider: mimo");
-  console.log(`model: ${diagnostics?.model ?? process.env.MIMO_MODEL ?? "mimo-v2.5"}`);
-  console.log(`original_bytes: ${image.originalByteLength}`);
-  console.log(`optimized_bytes: ${image.optimizedByteLength}`);
-  console.log(`duration_ms: ${Date.now() - startedAt}`);
-  console.log(`finish_reason: ${diagnostics?.finishReason ?? "unknown"}`);
-  console.log(`content_length: ${diagnostics?.outputLength ?? 0}`);
-  console.log(`recovered_from_truncation: ${getLastMiMoMenuParseDiagnostics()?.recoveredFromTruncation ?? false}`);
-  console.log(`retry_count: ${getLastMiMoMenuParseDiagnostics()?.retryCount ?? 0}`);
-  console.log("error_first_500_chars:");
-  console.log((error instanceof Error ? error.message : String(error)).slice(0, 500));
-  process.exitCode = 1;
+  try {
+    const bytes = await readFile(file);
+    const image = await createServerMenuImage({
+      name: file,
+      type: inferMimeType(file, bytes),
+      arrayBuffer: async () => toArrayBuffer(bytes),
+    });
+    const menu = await parseMenuWithMiMo([image]);
+    const menuDiagnostics = getLastMiMoMenuParseDiagnostics();
+    const chatDiagnostics = getLastMiMoChatDiagnostics();
+
+    rows.push({
+      file,
+      detail,
+      duration_ms: Date.now() - startedAt,
+      restaurant: menu.restaurant.name,
+      categories: menu.categories.length,
+      items: menu.categories.reduce((sum, category) => sum + category.items.length, 0),
+      finish_reason: menuDiagnostics?.finishReason ?? chatDiagnostics?.finishReason ?? "unknown",
+      recovered_from_truncation: String(menuDiagnostics?.recoveredFromTruncation ?? false),
+      error_code: "",
+    });
+  } catch (error) {
+    const chatDiagnostics = getLastMiMoChatDiagnostics();
+
+    rows.push({
+      file,
+      detail,
+      duration_ms: Date.now() - startedAt,
+      restaurant: "",
+      categories: "",
+      items: "",
+      finish_reason: chatDiagnostics?.finishReason ?? "unknown",
+      recovered_from_truncation: String(getLastMiMoMenuParseDiagnostics()?.recoveredFromTruncation ?? false),
+      error_code: readErrorCode(error),
+    });
+  }
 }
+
+console.table(rows);
 
 function readParseDetailArg(): "fast" | "balanced" | "accurate" {
   if (process.argv.includes("--fast")) {
@@ -110,6 +124,15 @@ async function loadLocalEnv(): Promise<void> {
     if (!isNodeErrorCode(error, "ENOENT")) {
       throw error;
     }
+  }
+}
+
+async function fileExists(file: string): Promise<boolean> {
+  try {
+    await access(file);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -182,6 +205,14 @@ function unquoteEnvValue(value: string): string {
   }
 
   return value;
+}
+
+function readErrorCode(error: unknown): string {
+  if (typeof error === "object" && error !== null && "code" in error) {
+    return String(error.code);
+  }
+
+  return error instanceof Error ? error.name : "ERROR";
 }
 
 function isNodeErrorCode(error: unknown, code: string): boolean {

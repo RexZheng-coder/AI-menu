@@ -42,6 +42,7 @@ MIMO_BASE_URL=https://api.xiaomimimo.com/v1
 MIMO_MODEL=mimo-v2.5
 MENU_AI_PROVIDER=mimo
 MENU_PARSE_STRATEGY=vision
+MENU_PARSE_DETAIL=accurate
 MAX_PARSE_IMAGES=2
 ```
 
@@ -102,7 +103,9 @@ The Vercel route `POST /api/menus/parse` accepts multipart image uploads from th
 
 API keys must stay server-side only in `MIMO_API_KEY`. Mock mode remains the default even when MiMo is configured. Real image parsing requires a MiMo model that supports image understanding; the default is `mimo-v2.5`.
 
-Real parsing defaults to `MENU_AI_PROVIDER=mimo` and `MENU_PARSE_STRATEGY=vision`. This single-pass MiMo vision parser reads uploaded images and returns enriched bilingual menu JSON with Chinese item names, visible prices, tags, allergens, spicy level, confidence, and conservative description fields. The fast prompt may leave descriptions empty on dense menus to keep responses inside the serverless time budget. OCR-first remains available only when explicitly selected with `MENU_PARSE_STRATEGY=ocr_first`.
+Real parsing defaults to `MENU_AI_PROVIDER=mimo`, `MENU_PARSE_STRATEGY=vision`, and `MENU_PARSE_DETAIL=accurate`. This single-pass MiMo vision parser reads uploaded images and prioritizes complete visible item coverage, bilingual item names, categories, and prices. Optional descriptions, tags, allergens, spicy level, and confidence are sanitized into the existing `Menu` contract; dense menus may leave optional fields empty so more visible items are preserved. OCR-first remains available only when explicitly selected with `MENU_PARSE_STRATEGY=ocr_first`.
+
+`MENU_PARSE_DETAIL=fast | balanced | accurate` controls the speed/completeness tradeoff. Accurate is the default and may be slower; fast is useful for demos but can be less complete on dense menus.
 
 DeepSeek is not used for vision parsing because the current DeepSeek API/model rejected OpenAI-style `image_url` input in diagnostics.
 
@@ -146,7 +149,7 @@ The app now uses a Node.js function plus an app-level MiMo timeout so slow provi
 - Confirm the selected `MIMO_MODEL` supports image understanding.
 - Confirm you are using a pay-as-you-go `sk-xxxxx` key with `https://api.xiaomimimo.com/v1`, not Token Plan credentials/base URLs.
 - Try a faster/smaller model through `MIMO_MODEL` if available.
-- Try a smaller/clearer image, reduce `MAX_PARSE_IMAGES`, or temporarily test `MENU_PARSE_STRATEGY=ocr_first` if single-pass vision repeatedly fails on a specific menu.
+- Try a smaller/clearer image, reduce `MAX_PARSE_IMAGES`, compare `MENU_PARSE_DETAIL=fast|balanced|accurate`, or temporarily test `MENU_PARSE_STRATEGY=ocr_first` if single-pass vision repeatedly fails on a specific menu.
 - Confirm the deployed build includes the latest Node function changes.
 
 ## Netlify Limitation

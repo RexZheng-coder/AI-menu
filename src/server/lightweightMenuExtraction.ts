@@ -7,6 +7,11 @@ export type LightweightMenuExtraction = {
   categories: LightweightMenuCategory[];
 };
 
+export type LightweightMenuParseResult = {
+  extraction: LightweightMenuExtraction;
+  recoveredFromTruncation: boolean;
+};
+
 export type LightweightMenuCategory = {
   name_en: string;
   name_zh: string;
@@ -27,12 +32,15 @@ export type LightweightMenuItem = {
 };
 
 export function parseLightweightExtractionFromText(text: string): LightweightMenuExtraction {
-  try {
-    const extraction = sanitizeLightweightExtraction(parseJsonFromText(text));
+  return parseLightweightExtractionWithMetadata(text).extraction;
+}
 
-    if (extraction.categories.length > 0 || !text.includes("\"categories\"")) {
-      return extraction;
-    }
+export function parseLightweightExtractionWithMetadata(text: string): LightweightMenuParseResult {
+  try {
+    return {
+      extraction: sanitizeLightweightExtraction(parseJsonFromText(text)),
+      recoveredFromTruncation: false,
+    };
   } catch {
     // Fall through to the partial parser below. Vision models sometimes hit
     // max tokens after several complete categories; those complete objects are
@@ -42,7 +50,10 @@ export function parseLightweightExtractionFromText(text: string): LightweightMen
   const partialExtraction = parsePartialExtractionFromText(text);
 
   if (partialExtraction.categories.length > 0) {
-    return partialExtraction;
+    return {
+      extraction: partialExtraction,
+      recoveredFromTruncation: true,
+    };
   }
 
   throw new Error("MiMo menu output was not valid JSON.");

@@ -9,7 +9,7 @@ declare const process:
 
 const maxUploadSizeBytes = 10 * 1024 * 1024;
 const maxTotalUploadSizeBytes = 32 * 1024 * 1024;
-const handlerTimeoutMs = 27_000;
+const handlerTimeoutMs = 29_000;
 const formDataTimeoutMs = 5_000;
 const defaultMaxParseImages = 2;
 const acceptedImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);

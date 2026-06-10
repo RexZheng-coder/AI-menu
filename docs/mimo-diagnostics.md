@@ -12,6 +12,7 @@ MIMO_BASE_URL=https://api.xiaomimimo.com/v1
 MIMO_MODEL=mimo-v2.5
 MENU_AI_PROVIDER=mimo
 MENU_PARSE_STRATEGY=vision
+MENU_PARSE_DETAIL=accurate
 MAX_PARSE_IMAGES=2
 ```
 
@@ -60,10 +61,16 @@ npm run test:mimo:menu -- ./sample-menu.jpg
 This runs the current default real parser locally:
 
 ```text
-image -> MiMo vision -> enriched bilingual JSON -> Menu conversion -> sanitizeMenu
+image -> MiMo vision -> accuracy-first bilingual JSON -> Menu conversion -> sanitizeMenu
 ```
 
-It prints provider, model, original bytes, optimized bytes, duration, finish reason, content length, restaurant name, category count, and item count.
+It prints provider, model, original bytes, optimized bytes, duration, finish reason, content length, truncation recovery status, restaurant name, category count, and item count.
+
+Accurate mode is the default:
+
+```sh
+npm run test:mimo:menu:accurate -- ./sample-menu.jpg
+```
 
 ## Fast Path / Preprocessing Test
 
@@ -74,6 +81,18 @@ npm run test:mimo:menu:fast -- ./sample-menu.jpg
 ```
 
 This uses the same parser path while highlighting preprocessing metadata. If optional `sharp` is not installed in the runtime, preprocessing safely falls back to no-op and reports identical original/optimized byte counts.
+
+Fast mode is useful for demos and latency checks, but it may be less complete on dense menus than the default accurate mode.
+
+## Benchmark Multiple Menus
+
+Run:
+
+```sh
+npm run benchmark:mimo:menus
+```
+
+This checks available local sample images and prints a table with file, parse detail, duration, restaurant name, category count, item count, finish reason, truncation recovery status, and error code if parsing fails. It never prints API keys or image base64.
 
 ## OCR Text Test
 
@@ -114,6 +133,9 @@ Real mode uses `MENU_AI_PROVIDER` and `MENU_PARSE_STRATEGY`:
 - `MENU_AI_PROVIDER=mimo`: default and currently supported vision provider.
 - `MENU_PARSE_STRATEGY=vision`: default single-pass MiMo image parser.
 - `MENU_PARSE_STRATEGY=ocr_first`: optional legacy pipeline that reads visible text first, then structures text into compact JSON.
+- `MENU_PARSE_DETAIL=accurate`: default completeness-first mode.
+- `MENU_PARSE_DETAIL=balanced`: middle ground between completion budget and item coverage.
+- `MENU_PARSE_DETAIL=fast`: quicker mode for demos and latency checks.
 
 DeepSeek is not used for vision parsing in this app because `deepseek-v4-flash` rejected OpenAI-style `image_url` input during diagnostics.
 
@@ -131,4 +153,4 @@ DeepSeek is not used for vision parsing in this app because `deepseek-v4-flash` 
 
 - OCR may miss small, blurred, cropped, or low-contrast text.
 - MiMo-generated Chinese translation, tags, allergens, spicy level, and confidence may need correction.
-- Complex menus may still need retries, clearer photos, fewer uploaded pages, or temporary OCR-first comparison.
+- Complex menus may still need retries, clearer photos, fewer uploaded pages, detail-mode comparison, or temporary OCR-first comparison.

@@ -76,11 +76,13 @@ export async function parseUploadedMenuFilesOnServer(
 async function parseMenuWithStrategy(images: ServerMenuImage[]): Promise<Menu> {
   const strategy = readParseStrategy();
   const provider = readAiProvider();
+  const detail = readParseDetail();
 
   console.info("[menu-parse]", {
     event: "parse_strategy",
     provider,
     strategy,
+    detail,
   });
 
   if (strategy === "ocr_first") {
@@ -112,6 +114,16 @@ function readAiProvider(): AiProvider {
   }
 
   return "mimo";
+}
+
+function readParseDetail(): string {
+  const value = readEnv("MENU_PARSE_DETAIL");
+
+  if (value === "fast" || value === "balanced" || value === "accurate") {
+    return value;
+  }
+
+  return "accurate";
 }
 
 function readEnv(name: string): string | undefined {

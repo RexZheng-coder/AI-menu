@@ -77,7 +77,8 @@ Real AI/OCR parsing is available only through the serverless API route and is no
 - Static deployment defaults to mock parsing.
 - Real mode is activated with `?parse=real` or `?ai=1`.
 - `POST /api/menus/parse` accepts uploaded image files and calls Xiaomi MiMo from server-side code only.
-- Real mode defaults to MiMo direct vision: `MENU_AI_PROVIDER=mimo` and `MENU_PARSE_STRATEGY=vision`.
+- Real mode defaults to accuracy-first MiMo direct vision: `MENU_AI_PROVIDER=mimo`, `MENU_PARSE_STRATEGY=vision`, and `MENU_PARSE_DETAIL=accurate`.
+- `MENU_PARSE_DETAIL=fast | balanced | accurate` controls the speed/completeness tradeoff. Accurate is slower but preserves more visible menu items.
 - OCR-first remains available only when explicitly selected with `MENU_PARSE_STRATEGY=ocr_first`.
 - DeepSeek is not used for vision parsing because the current DeepSeek API/model rejected `image_url` input in diagnostics.
 - Server-side MiMo parser modules, enriched single-pass prompts, and sanitization utilities exist under `src/server/*`, `api/*`, and `src/lib/*`.
@@ -168,18 +169,21 @@ MIMO_BASE_URL=https://api.xiaomimimo.com/v1
 MIMO_MODEL=mimo-v2.5
 MENU_AI_PROVIDER=mimo
 MENU_PARSE_STRATEGY=vision
+MENU_PARSE_DETAIL=accurate
 MAX_PARSE_IMAGES=2
 ```
 
 Use the Xiaomi MiMo pay-as-you-go API key format, usually `sk-xxxxx`, with the OpenAI-compatible base URL above. Do not mix Token Plan `tp-xxxxx` credentials or token-plan base URLs with this route. Real image parsing also requires the selected MiMo model to support image understanding; the default is `mimo-v2.5`.
 
-Set `MENU_PARSE_STRATEGY=ocr_first` only when you explicitly want the older OCR-first pipeline. Direct MiMo vision is the default real parser.
+Set `MENU_PARSE_STRATEGY=ocr_first` only when you explicitly want the older OCR-first pipeline. Direct MiMo vision is the default real parser. Use `MENU_PARSE_DETAIL=fast` for quick demos, `balanced` for a middle ground, or `accurate` for the default completeness-first parser.
 
 Useful diagnostics:
 
 ```bash
 npm run test:mimo:menu -- "sample menu/menu.jpg"
+npm run test:mimo:menu:accurate -- "sample menu/menu.jpg"
 npm run test:mimo:menu:fast -- "sample menu/menu.jpg"
+npm run benchmark:mimo:menus
 ```
 
 ## Screenshots
@@ -200,9 +204,9 @@ The current generated screenshot file is ignored by Git and is not referenced di
 - Uploaded images are not persisted by this app, but real mode sends them to the configured MiMo provider for parsing.
 - AI parsing may be incomplete or wrong; the app sanitizes output but does not guarantee menu accuracy.
 - OCR-first may miss tiny, blurred, cropped, or low-contrast text.
-- Real-mode vision parsing prioritizes complete JSON within the serverless time budget; dense menus may return only the first readable items and may leave descriptions empty.
+- Real-mode vision parsing defaults to item coverage first. Dense menus may leave descriptions, tags, or allergens empty so more visible item names and prices are preserved.
 - Chinese translations, tags, allergens, spicy levels, and confidence values are AI-generated and may need user correction in a production system.
-- Very dense or complex menus may still need retries, clearer photos, or temporary OCR-first testing.
+- Very dense or complex menus may still need retries, clearer photos, `MENU_PARSE_DETAIL=fast` for demos, or temporary OCR-first comparison.
 - Image preprocessing is a safe no-op unless an optional `sharp` runtime is available.
 - The app is an MVP rather than a production ordering system.
 

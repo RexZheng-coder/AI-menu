@@ -144,6 +144,7 @@ export async function sendMiMoChatCompletion(options: {
   retryWithoutThinking?: boolean;
 }): Promise<MiMoChatCompletionResult> {
   const includeThinking = options.includeThinking ?? true;
+  lastMiMoChatDiagnostics = null;
 
   try {
     return await sendMiMoChatCompletionOnce({

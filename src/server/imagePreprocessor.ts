@@ -4,6 +4,12 @@ export type ImagePreprocessInput = {
   bytes: Uint8Array;
 };
 
+declare const process:
+  | {
+      env?: Record<string, string | undefined>;
+    }
+  | undefined;
+
 export type ImagePreprocessResult = {
   name: string;
   mimeType: string;
@@ -29,13 +35,11 @@ type SharpImage = {
 type SharpFactory = (input: Uint8Array) => SharpImage;
 
 const optimizationThresholdBytes = 900_000;
-const maxImageDimensionPx = 1800;
-const jpegQuality = 82;
-
 export async function preprocessServerImage(input: ImagePreprocessInput): Promise<ImagePreprocessResult> {
   const originalByteLength = input.bytes.byteLength;
   const sha256 = await createSha256(input.bytes);
   const sharp = await loadOptionalSharp();
+  const optimizationConfig = readOptimizationConfig();
 
   if (!sharp || originalByteLength < optimizationThresholdBytes) {
     return {
@@ -53,13 +57,13 @@ export async function preprocessServerImage(input: ImagePreprocessInput): Promis
     const optimizedBytes = await sharp(input.bytes)
       .rotate()
       .resize({
-        width: maxImageDimensionPx,
-        height: maxImageDimensionPx,
+        width: optimizationConfig.maxImageDimensionPx,
+        height: optimizationConfig.maxImageDimensionPx,
         fit: "inside",
         withoutEnlargement: true,
       })
       .jpeg({
-        quality: jpegQuality,
+        quality: optimizationConfig.jpegQuality,
         mozjpeg: true,
       })
       .toBuffer();
@@ -96,6 +100,29 @@ export async function preprocessServerImage(input: ImagePreprocessInput): Promis
       optimization: "noop",
     };
   }
+}
+
+function readOptimizationConfig(): { maxImageDimensionPx: number; jpegQuality: number } {
+  const detail = readEnv("MENU_PARSE_DETAIL");
+
+  if (detail === "fast") {
+    return {
+      maxImageDimensionPx: 1600,
+      jpegQuality: 82,
+    };
+  }
+
+  if (detail === "balanced") {
+    return {
+      maxImageDimensionPx: 1800,
+      jpegQuality: 85,
+    };
+  }
+
+  return {
+    maxImageDimensionPx: 2000,
+    jpegQuality: 88,
+  };
 }
 
 async function loadOptionalSharp(): Promise<SharpFactory | null> {
@@ -135,4 +162,9 @@ function asRecord(input: unknown): Record<string, unknown> {
   }
 
   return {};
+}
+
+function readEnv(name: string): string | undefined {
+  const value = typeof process !== "undefined" ? process.env?.[name] : undefined;
+  return value && value.trim().length > 0 ? value.trim() : undefined;
 }
