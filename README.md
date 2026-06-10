@@ -77,9 +77,10 @@ Real AI/OCR parsing is available only through the serverless API route and is no
 - Static deployment defaults to mock parsing.
 - Real mode is activated with `?parse=real` or `?ai=1`.
 - `POST /api/menus/parse` accepts uploaded image files and calls Xiaomi MiMo from server-side code only.
-- Real mode supports two parser strategies: OCR-first (`MIMO_PARSE_STRATEGY=ocr_first`) and direct vision (`MIMO_PARSE_STRATEGY=vision`).
-- OCR-first is the default: MiMo first extracts visible menu text, then a text-only MiMo pass structures that text into compact JSON.
-- Server-side MiMo parser modules, lightweight JSON prompts, and sanitization utilities exist under `src/server/*`, `api/*`, and `src/lib/*`.
+- Real mode defaults to MiMo direct vision: `MENU_AI_PROVIDER=mimo` and `MENU_PARSE_STRATEGY=vision`.
+- OCR-first remains available only when explicitly selected with `MENU_PARSE_STRATEGY=ocr_first`.
+- DeepSeek is not used for vision parsing because the current DeepSeek API/model rejected `image_url` input in diagnostics.
+- Server-side MiMo parser modules, enriched single-pass prompts, and sanitization utilities exist under `src/server/*`, `api/*`, and `src/lib/*`.
 - API keys are never exposed in frontend code.
 - Opening the app with `?parse=real` before `MIMO_API_KEY` is configured shows a friendly error instead of silently returning mock data.
 - Real parsing may send uploaded images to MiMo; use appropriate test images and be mindful of provider cost and image privacy.
@@ -92,16 +93,18 @@ Key modules:
 - `src/mock/menuMock.ts`: Realistic bilingual mock menu used by static/mock parsing.
 - `src/lib/menuUtils.ts`: Cart item creation, cart totals, item lookup, and order summary generation.
 - `src/lib/parseMenuImages.ts`: Frontend-facing parser seam. Defaults to mock parsing and can call `/api/menus/parse` in real mode.
+- `src/lib/menuSinglePassPrompt.ts`: Single-pass MiMo vision prompt for bilingual extraction, tags, allergens, spicy level, confidence, and prices.
 - `src/lib/menuValidation.ts`: Sanitizes unknown AI-shaped JSON into the existing `Menu` type and rejects empty parsed menus.
 - `src/lib/menuHistory.ts`: Strongly typed localStorage helpers for saved menu history.
 - `src/components/*`: DOM-rendered UI components for upload, history, menu categories, item cards, tags, cart, and order summary.
 - `api/menus/parse.ts`: Vercel serverless route for multipart image uploads and MiMo-backed parsing.
+- `src/server/imagePreprocessor.ts`: Server-side image preprocessing hook. It logs byte counts and SHA-256 hashes, and optionally uses `sharp` if available; otherwise it safely falls back to no-op processing.
 - `src/server/mimoOcrExtractor.ts`: MiMo image-to-text OCR extraction phase for real parsing.
 - `src/server/menuTextStructurer.ts`: Text-only MiMo structuring phase that returns lightweight menu JSON.
 - `src/server/mimoOcrMenuParser.ts`: OCR-first orchestrator that connects OCR, text structuring, conversion, and sanitization.
 - `src/server/mimoChatClient.ts`: Shared MiMo chat-completions client, timeout handling, safe logs, and structured provider errors.
 - `src/server/lightweightMenuExtraction.ts`: Shared conversion from lightweight extraction JSON into the existing `Menu` contract.
-- `src/server/mimoMenuParser.ts`: Existing direct MiMo vision parser, kept as the `vision` strategy and OCR fallback.
+- `src/server/mimoMenuParser.ts`: Default direct MiMo vision parser for real mode.
 - `src/server/*`: Server-only AI/OCR parsing modules, including image conversion, parser handler, and MiMo provider adapters.
 - `scripts/build-static.mjs`: Builds TypeScript and produces a self-contained `dist/` static output.
 
@@ -163,12 +166,21 @@ For real MiMo parsing on Vercel, configure server-side environment variables:
 MIMO_API_KEY=
 MIMO_BASE_URL=https://api.xiaomimimo.com/v1
 MIMO_MODEL=mimo-v2.5
-MIMO_PARSE_STRATEGY=ocr_first
+MENU_AI_PROVIDER=mimo
+MENU_PARSE_STRATEGY=vision
+MAX_PARSE_IMAGES=2
 ```
 
 Use the Xiaomi MiMo pay-as-you-go API key format, usually `sk-xxxxx`, with the OpenAI-compatible base URL above. Do not mix Token Plan `tp-xxxxx` credentials or token-plan base URLs with this route. Real image parsing also requires the selected MiMo model to support image understanding; the default is `mimo-v2.5`.
 
-Set `MIMO_PARSE_STRATEGY=vision` to force the previous direct image-to-menu parser. The default `ocr_first` path is usually faster and more stable because image reading and text structuring are split into two smaller model calls.
+Set `MENU_PARSE_STRATEGY=ocr_first` only when you explicitly want the older OCR-first pipeline. Direct MiMo vision is the default real parser.
+
+Useful diagnostics:
+
+```bash
+npm run test:mimo:menu -- "sample menu/menu.jpg"
+npm run test:mimo:menu:fast -- "sample menu/menu.jpg"
+```
 
 ## Screenshots
 
@@ -188,8 +200,10 @@ The current generated screenshot file is ignored by Git and is not referenced di
 - Uploaded images are not persisted by this app, but real mode sends them to the configured MiMo provider for parsing.
 - AI parsing may be incomplete or wrong; the app sanitizes output but does not guarantee menu accuracy.
 - OCR-first may miss tiny, blurred, cropped, or low-contrast text.
-- Chinese translations, tags, allergens, and spicy levels are still basic placeholders in real parsed menus.
-- Very dense or complex menus may still need retries or the `vision` fallback strategy.
+- Real-mode vision parsing prioritizes complete JSON within the serverless time budget; dense menus may return only the first readable items and may leave descriptions empty.
+- Chinese translations, tags, allergens, spicy levels, and confidence values are AI-generated and may need user correction in a production system.
+- Very dense or complex menus may still need retries, clearer photos, or temporary OCR-first testing.
+- Image preprocessing is a safe no-op unless an optional `sharp` runtime is available.
 - The app is an MVP rather than a production ordering system.
 
 ## Future Roadmap

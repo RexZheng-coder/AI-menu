@@ -9,17 +9,43 @@ export type LightweightMenuExtraction = {
 
 export type LightweightMenuCategory = {
   name_en: string;
+  name_zh: string;
   items: LightweightMenuItem[];
 };
 
 export type LightweightMenuItem = {
   name_en: string;
+  name_zh: string;
   description_en: string | null;
+  description_zh: string | null;
   price_raw: string | null;
+  tags: string[];
+  tags_zh: string[];
+  spicy_level: 0 | 1 | 2 | 3;
+  allergens: string[];
+  confidence: number;
 };
 
 export function parseLightweightExtractionFromText(text: string): LightweightMenuExtraction {
-  return sanitizeLightweightExtraction(parseJsonFromText(text));
+  try {
+    const extraction = sanitizeLightweightExtraction(parseJsonFromText(text));
+
+    if (extraction.categories.length > 0 || !text.includes("\"categories\"")) {
+      return extraction;
+    }
+  } catch {
+    // Fall through to the partial parser below. Vision models sometimes hit
+    // max tokens after several complete categories; those complete objects are
+    // still safe to display.
+  }
+
+  const partialExtraction = parsePartialExtractionFromText(text);
+
+  if (partialExtraction.categories.length > 0) {
+    return partialExtraction;
+  }
+
+  throw new Error("MiMo menu output was not valid JSON.");
 }
 
 export function sanitizeLightweightExtraction(input: unknown): LightweightMenuExtraction {
@@ -65,6 +91,7 @@ function sanitizeLightweightCategory(input: unknown, index: number): Lightweight
 
   return {
     name_en: nameEn,
+    name_zh: asString(source.name_zh) ?? nameEn,
     items: asArray(source.items)
       .map((itemInput, itemIndex) => sanitizeLightweightItem(itemInput, itemIndex))
       .filter((item) => item.name_en.length > 0),
@@ -76,8 +103,15 @@ function sanitizeLightweightItem(input: unknown, index: number): LightweightMenu
 
   return {
     name_en: asString(source.name_en) ?? `Item ${index + 1}`,
+    name_zh: asString(source.name_zh) ?? asString(source.name_en) ?? `Item ${index + 1}`,
     description_en: asNullableString(source.description_en),
+    description_zh: asNullableString(source.description_zh) ?? asNullableString(source.description_en),
     price_raw: asNullableString(source.price_raw),
+    tags: asStringArray(source.tags),
+    tags_zh: asStringArray(source.tags_zh),
+    spicy_level: sanitizeSpicyLevel(source.spicy_level),
+    allergens: asStringArray(source.allergens),
+    confidence: sanitizeConfidence(source.confidence),
   };
 }
 
@@ -124,7 +158,7 @@ function createMenuCategory(category: LightweightMenuCategory, index: number): R
   return {
     category_id: categoryId,
     name_en: category.name_en,
-    name_zh: category.name_en,
+    name_zh: category.name_zh,
     items: category.items.map((item, itemIndex) => createMenuItem(item, categoryId, itemIndex)),
   };
 }
@@ -135,20 +169,20 @@ function createMenuItem(item: LightweightMenuItem, categoryId: string, index: nu
   return {
     item_id: `${categoryId}_item_${slugify(itemName)}_${index + 1}`,
     name_en: itemName,
-    name_zh: itemName,
+    name_zh: item.name_zh || itemName,
     description_en: item.description_en,
-    description_zh: item.description_en,
+    description_zh: item.description_zh,
     price: {
       amount: parsePriceAmount(item.price_raw),
       currency: "USD",
       raw: item.price_raw,
     },
-    tags: [],
-    tags_zh: [],
-    spicy_level: 0,
-    allergens: [],
+    tags: item.tags,
+    tags_zh: item.tags_zh,
+    spicy_level: item.spicy_level,
+    allergens: item.allergens,
     is_recommended: false,
-    confidence: 0.8,
+    confidence: item.confidence,
   };
 }
 
@@ -158,15 +192,60 @@ function parseJsonFromText(text: string): unknown {
   try {
     return JSON.parse(trimmedText) as unknown;
   } catch {
-    const start = trimmedText.indexOf("{");
-    const end = trimmedText.lastIndexOf("}");
+    const jsonObjectText = findTopLevelJsonObject(trimmedText);
 
-    if (start >= 0 && end > start) {
-      return JSON.parse(trimmedText.slice(start, end + 1)) as unknown;
+    if (jsonObjectText) {
+      return JSON.parse(jsonObjectText) as unknown;
     }
 
     throw new Error("MiMo menu output was not valid JSON.");
   }
+}
+
+function parsePartialExtractionFromText(text: string): LightweightMenuExtraction {
+  const trimmedText = stripCodeFence(text.trim());
+  const categoriesStart = trimmedText.indexOf("\"categories\"");
+
+  if (categoriesStart < 0) {
+    return sanitizeLightweightExtraction({});
+  }
+
+  const categoriesArrayStart = trimmedText.indexOf("[", categoriesStart);
+
+  if (categoriesArrayStart < 0) {
+    return sanitizeLightweightExtraction({});
+  }
+
+  const categories: unknown[] = [];
+  let cursor = categoriesArrayStart + 1;
+
+  while (cursor < trimmedText.length) {
+    const categoryStart = trimmedText.indexOf("{", cursor);
+
+    if (categoryStart < 0) {
+      break;
+    }
+
+    const categoryJson = readCompleteJsonObjectAt(trimmedText, categoryStart);
+
+    if (!categoryJson) {
+      break;
+    }
+
+    try {
+      categories.push(JSON.parse(categoryJson.text) as unknown);
+    } catch {
+      break;
+    }
+
+    cursor = categoryJson.endIndex + 1;
+  }
+
+  return sanitizeLightweightExtraction({
+    restaurant_name: readNullableJsonStringField(trimmedText, "restaurant_name"),
+    cuisine_type: readNullableJsonStringField(trimmedText, "cuisine_type"),
+    categories,
+  });
 }
 
 function stripCodeFence(text: string): string {
@@ -197,6 +276,33 @@ function asNullableString(input: unknown): string | null {
   return asString(input) ?? null;
 }
 
+function asStringArray(input: unknown): string[] {
+  return asArray(input).flatMap((value) => {
+    const stringValue = asString(value);
+    return stringValue ? [stringValue] : [];
+  });
+}
+
+function sanitizeSpicyLevel(input: unknown): 0 | 1 | 2 | 3 {
+  if (input === 0 || input === 1 || input === 2 || input === 3) {
+    return input;
+  }
+
+  if (typeof input === "number" && Number.isFinite(input)) {
+    return Math.max(0, Math.min(3, Math.round(input))) as 0 | 1 | 2 | 3;
+  }
+
+  return 0;
+}
+
+function sanitizeConfidence(input: unknown): number {
+  if (typeof input === "number" && Number.isFinite(input)) {
+    return Math.max(0, Math.min(1, input));
+  }
+
+  return 0.8;
+}
+
 function parsePriceAmount(raw: string | null): number | null {
   if (!raw) {
     return null;
@@ -204,6 +310,116 @@ function parsePriceAmount(raw: string | null): number | null {
 
   const match = raw.replace(/,/g, "").match(/\d+(?:\.\d+)?/);
   return match ? Number(match[0]) : null;
+}
+
+function findTopLevelJsonObject(text: string): string | null {
+  const start = text.indexOf("{");
+
+  if (start < 0) {
+    return null;
+  }
+
+  return readCompleteJsonObjectAt(text, start)?.text ?? null;
+}
+
+function readCompleteJsonObjectAt(text: string, start: number): { text: string; endIndex: number } | null {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = start; index < text.length; index += 1) {
+    const character = text[index];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (character === "\\") {
+      escaped = inString;
+      continue;
+    }
+
+    if (character === "\"") {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) {
+      continue;
+    }
+
+    if (character === "{") {
+      depth += 1;
+    } else if (character === "}") {
+      depth -= 1;
+
+      if (depth === 0) {
+        return {
+          text: text.slice(start, index + 1),
+          endIndex: index,
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+function readNullableJsonStringField(text: string, fieldName: string): string | null {
+  const fieldIndex = text.indexOf(`"${fieldName}"`);
+
+  if (fieldIndex < 0) {
+    return null;
+  }
+
+  const colonIndex = text.indexOf(":", fieldIndex);
+
+  if (colonIndex < 0) {
+    return null;
+  }
+
+  const valueStart = text.slice(colonIndex + 1).search(/\S/);
+
+  if (valueStart < 0) {
+    return null;
+  }
+
+  const absoluteValueStart = colonIndex + 1 + valueStart;
+
+  if (text.startsWith("null", absoluteValueStart)) {
+    return null;
+  }
+
+  if (text[absoluteValueStart] !== "\"") {
+    return null;
+  }
+
+  let escaped = false;
+
+  for (let index = absoluteValueStart + 1; index < text.length; index += 1) {
+    const character = text[index];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (character === "\\") {
+      escaped = true;
+      continue;
+    }
+
+    if (character === "\"") {
+      try {
+        return JSON.parse(text.slice(absoluteValueStart, index + 1)) as string;
+      } catch {
+        return null;
+      }
+    }
+  }
+
+  return null;
 }
 
 function slugify(value: string): string {

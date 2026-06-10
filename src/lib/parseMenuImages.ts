@@ -217,6 +217,14 @@ function getBackendErrorCode(code: string | undefined, status: number): ParseMen
     return status === 503 ? "server_config" : "provider_failure";
   }
 
+  if (code === "AI_INVALID_JSON" || code === "ai_invalid_json") {
+    return "provider_failure";
+  }
+
+  if (code === "EMPTY_MENU_EXTRACTION" || code === "empty_menu_extraction") {
+    return "empty_menu";
+  }
+
   if (
     code === "INVALID_CONTENT_TYPE" ||
     code === "INVALID_FORM_DATA" ||

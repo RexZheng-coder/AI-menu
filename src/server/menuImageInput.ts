@@ -1,7 +1,13 @@
+import { preprocessServerImage } from "./imagePreprocessor.js";
+
 export type ServerMenuImage = {
   name: string;
   mimeType: string;
   dataUrl: string;
+  originalByteLength: number;
+  optimizedByteLength: number;
+  sha256: string;
+  optimization: "sharp" | "noop";
 };
 
 export type ServerUploadedImageFile = {
@@ -11,12 +17,22 @@ export type ServerUploadedImageFile = {
 };
 
 export async function createServerMenuImage(file: ServerUploadedImageFile): Promise<ServerMenuImage> {
+  const mimeType = file.type || inferMimeType(file.name);
+  const originalBytes = new Uint8Array(await file.arrayBuffer());
+  const preprocessed = await preprocessServerImage({
+    name: file.name,
+    mimeType,
+    bytes: originalBytes,
+  });
+
   return {
     name: file.name,
-    mimeType: file.type || inferMimeType(file.name),
-    dataUrl: `data:${file.type || inferMimeType(file.name)};base64,${arrayBufferToBase64(
-      await file.arrayBuffer(),
-    )}`,
+    mimeType: preprocessed.mimeType,
+    dataUrl: `data:${preprocessed.mimeType};base64,${arrayBufferToBase64(preprocessed.bytes)}`,
+    originalByteLength: preprocessed.originalByteLength,
+    optimizedByteLength: preprocessed.optimizedByteLength,
+    sha256: preprocessed.sha256,
+    optimization: preprocessed.optimization,
   };
 }
 
@@ -24,8 +40,7 @@ export async function createServerMenuImages(files: ServerUploadedImageFile[]): 
   return Promise.all(files.map((file) => createServerMenuImage(file)));
 }
 
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
+function arrayBufferToBase64(bytes: Uint8Array): string {
   const chunkSize = 0x8000;
   let binary = "";
 

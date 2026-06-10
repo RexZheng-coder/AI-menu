@@ -1,10 +1,17 @@
 import { parseMenuImagesOnServer } from "../../src/server/menuParseHandler.js";
 import { createServerMenuImages, type ServerUploadedImageFile } from "../../src/server/menuImageInput.js";
 
+declare const process:
+  | {
+      env?: Record<string, string | undefined>;
+    }
+  | undefined;
+
 const maxUploadSizeBytes = 10 * 1024 * 1024;
 const maxTotalUploadSizeBytes = 32 * 1024 * 1024;
-const handlerTimeoutMs = 29_000;
+const handlerTimeoutMs = 27_000;
 const formDataTimeoutMs = 5_000;
+const defaultMaxParseImages = 2;
 const acceptedImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const acceptedImageExtensions = [".jpg", ".jpeg", ".png", ".webp"];
 
@@ -20,6 +27,8 @@ type ApiErrorCode =
   | "MIMO_API_ERROR"
   | "MIMO_UNSUPPORTED_MODEL"
   | "MIMO_PARSE_FAILED"
+  | "AI_INVALID_JSON"
+  | "EMPTY_MENU_EXTRACTION"
   | "SERVER_CONFIG"
   | "EMPTY_MENU"
   | "FORMDATA_TIMEOUT"
@@ -137,15 +146,27 @@ export default async function handler(request: NodeRequest, response: NodeRespon
       return;
     }
 
-    const imageCount = filesResult.files.length;
-    const totalBytes = filesResult.files.reduce((sum, file) => sum + file.size, 0);
-    const fileTypes = filesResult.files.map((file) => file.type || inferContentType(file.name));
+    const maxParseImages = readMaxParseImages();
+    const selectedFiles = filesResult.files.slice(0, maxParseImages);
+    const imageCount = selectedFiles.length;
+    const uploadedImageCount = filesResult.files.length;
+    const totalBytes = selectedFiles.reduce((sum, file) => sum + file.size, 0);
+    const fileTypes = selectedFiles.map((file) => file.type || inferContentType(file.name));
 
     logInfo(logMeta, "images_extracted", {
       imageCount,
+      uploadedImageCount,
       totalBytes,
       fileTypes,
     });
+
+    if (uploadedImageCount > imageCount) {
+      logInfo(logMeta, "images_limited", {
+        uploadedImageCount,
+        processedImageCount: imageCount,
+        maxParseImages,
+      });
+    }
 
     if (isDebugRequest(request)) {
       logInfo(logMeta, "route_success", {
@@ -167,9 +188,13 @@ export default async function handler(request: NodeRequest, response: NodeRespon
       imageCount,
       totalBytes,
     });
-    const images = await createServerMenuImages(filesResult.files);
+    const images = await createServerMenuImages(selectedFiles);
     logInfo(logMeta, "image_conversion_done", {
       imageCount: images.length,
+      originalBytes: images.reduce((sum, image) => sum + image.originalByteLength, 0),
+      optimizedBytes: images.reduce((sum, image) => sum + image.optimizedByteLength, 0),
+      imageHashes: images.map((image) => image.sha256.slice(0, 16)),
+      optimizations: images.map((image) => image.optimization),
     });
 
     const parseResponse = await parseMenuImagesOnServer({ images });
@@ -509,6 +534,8 @@ function normalizeParserErrorCode(code: string | undefined, error: string): ApiE
     case "MIMO_API_ERROR":
     case "MIMO_UNSUPPORTED_MODEL":
     case "MIMO_PARSE_FAILED":
+    case "AI_INVALID_JSON":
+    case "EMPTY_MENU_EXTRACTION":
     case "EMPTY_MENU":
       return code;
     default:
@@ -547,15 +574,26 @@ function getParserErrorStatus(code: ApiErrorCode): number {
     return 400;
   }
 
+  if (code === "AI_INVALID_JSON") {
+    return 400;
+  }
+
   if (code === "MIMO_API_ERROR") {
     return 502;
   }
 
-  if (code === "EMPTY_MENU") {
+  if (code === "EMPTY_MENU" || code === "EMPTY_MENU_EXTRACTION") {
     return 422;
   }
 
   return 502;
+}
+
+function readMaxParseImages(): number {
+  const rawValue = typeof process !== "undefined" ? process.env?.MAX_PARSE_IMAGES : undefined;
+  const value = rawValue ? Number(rawValue) : defaultMaxParseImages;
+
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : defaultMaxParseImages;
 }
 
 function isDebugRequest(request: NodeRequest): boolean {

@@ -35,7 +35,7 @@ type MiMoChatCompletionRequest = {
   max_completion_tokens: number;
   temperature: number;
   stream: false;
-  thinking: {
+  thinking?: {
     type: "disabled";
   };
 };
@@ -47,6 +47,17 @@ export type MiMoChatCompletionResult = {
   outputText: string;
   durationMs: number;
   finishReason?: string;
+  usage: unknown;
+};
+
+export type MiMoChatDiagnostics = {
+  provider: "mimo";
+  model: string;
+  durationMs: number;
+  status?: number;
+  finishReason?: string;
+  bodyLength: number;
+  outputLength: number;
   usage: unknown;
 };
 
@@ -64,7 +75,9 @@ export type MiMoParserErrorCode =
   | "MIMO_TIMEOUT"
   | "MIMO_API_ERROR"
   | "MIMO_UNSUPPORTED_MODEL"
-  | "MIMO_PARSE_FAILED";
+  | "MIMO_PARSE_FAILED"
+  | "AI_INVALID_JSON"
+  | "EMPTY_MENU_EXTRACTION";
 
 export class MiMoParserError extends Error {
   readonly code: MiMoParserErrorCode;
@@ -84,6 +97,7 @@ export const defaultMiMoModel = "mimo-v2.5";
 export const defaultMiMoTimeoutMs = 24_000;
 
 const imageCapableModels = new Set(["mimo-v2.5", "mimo-v2-omni"]);
+let lastMiMoChatDiagnostics: MiMoChatDiagnostics | null = null;
 
 export function createMiMoConfig(options: MiMoChatOptions = {}): MiMoConfig {
   const apiKey = options.apiKey ?? readEnv("MIMO_API_KEY");
@@ -126,6 +140,48 @@ export async function sendMiMoChatCompletion(options: {
   temperature: number;
   logLabel: string;
   imageCount?: number;
+  includeThinking?: boolean;
+  retryWithoutThinking?: boolean;
+}): Promise<MiMoChatCompletionResult> {
+  const includeThinking = options.includeThinking ?? true;
+
+  try {
+    return await sendMiMoChatCompletionOnce({
+      ...options,
+      includeThinking,
+    });
+  } catch (error) {
+    if (
+      includeThinking &&
+      options.retryWithoutThinking !== false &&
+      error instanceof MiMoParserError &&
+      error.code === "MIMO_API_ERROR" &&
+      looksLikeUnsupportedThinking(error.message)
+    ) {
+      console.info("[menu-parse]", {
+        event: `${options.logLabel}_retry_without_thinking`,
+        provider: "mimo",
+        model: options.config.model,
+      });
+
+      return sendMiMoChatCompletionOnce({
+        ...options,
+        includeThinking: false,
+      });
+    }
+
+    throw error;
+  }
+}
+
+async function sendMiMoChatCompletionOnce(options: {
+  config: MiMoConfig;
+  messages: MiMoChatMessage[];
+  maxCompletionTokens: number;
+  temperature: number;
+  logLabel: string;
+  imageCount?: number;
+  includeThinking: boolean;
 }): Promise<MiMoChatCompletionResult> {
   const abortController = new AbortController();
   const timeoutId = setTimeout(() => {
@@ -139,10 +195,12 @@ export async function sendMiMoChatCompletion(options: {
   try {
     console.info("[menu-parse]", {
       event: `${options.logLabel}_request_start`,
+      provider: "mimo",
       endpointHost: safeUrlHost(options.config.endpoint),
       model: options.config.model,
       imageCount: options.imageCount,
       timeoutMs: options.config.timeoutMs,
+      includeThinking: options.includeThinking,
     });
 
     response = await options.config.fetchFn(options.config.endpoint, {
@@ -157,6 +215,7 @@ export async function sendMiMoChatCompletion(options: {
 
     console.info("[menu-parse]", {
       event: `${options.logLabel}_response_status`,
+      provider: "mimo",
       status: response.status,
       statusText: response.statusText,
       ok: response.ok,
@@ -195,6 +254,7 @@ export async function sendMiMoChatCompletion(options: {
 
     console.warn("[menu-parse]", {
       event: `${options.logLabel}_response_error`,
+      provider: "mimo",
       code: "MIMO_API_ERROR",
       status: response.status,
       statusText: response.statusText,
@@ -215,12 +275,23 @@ export async function sendMiMoChatCompletion(options: {
 
   console.info("[menu-parse]", {
     event: `${options.logLabel}_response_summary`,
+    provider: "mimo",
     durationMs,
     bodyLength: responseText.length,
     outputLength: outputText.length,
     finishReason,
     usage,
   });
+  lastMiMoChatDiagnostics = {
+    provider: "mimo",
+    model: options.config.model,
+    durationMs,
+    status: response.status,
+    finishReason,
+    bodyLength: responseText.length,
+    outputLength: outputText.length,
+    usage,
+  };
 
   return {
     model: options.config.model,
@@ -231,6 +302,10 @@ export async function sendMiMoChatCompletion(options: {
     finishReason,
     usage,
   };
+}
+
+export function getLastMiMoChatDiagnostics(): MiMoChatDiagnostics | null {
+  return lastMiMoChatDiagnostics;
 }
 
 export function readEnv(name: string): string | undefined {
@@ -271,6 +346,7 @@ function createMiMoRequestBody(options: {
   messages: MiMoChatMessage[];
   maxCompletionTokens: number;
   temperature: number;
+  includeThinking: boolean;
 }): MiMoChatCompletionRequest {
   return {
     model: options.config.model,
@@ -278,10 +354,19 @@ function createMiMoRequestBody(options: {
     max_completion_tokens: options.maxCompletionTokens,
     temperature: options.temperature,
     stream: false,
-    thinking: {
-      type: "disabled",
-    },
+    ...(options.includeThinking
+      ? {
+          thinking: {
+            type: "disabled",
+          },
+        }
+      : {}),
   };
+}
+
+function looksLikeUnsupportedThinking(text: string): boolean {
+  const lowerText = text.toLowerCase();
+  return lowerText.includes("thinking") || lowerText.includes("unknown parameter");
 }
 
 function safeUrlHost(url: string): string {

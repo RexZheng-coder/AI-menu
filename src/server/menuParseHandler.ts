@@ -27,6 +27,7 @@ export type ParseMenuResponse =
     };
 
 type ParseStrategy = "ocr_first" | "vision";
+type AiProvider = "mimo";
 
 export async function parseMenuImagesOnServer(request: ParseMenuRequest): Promise<ParseMenuResponse> {
   try {
@@ -74,55 +75,43 @@ export async function parseUploadedMenuFilesOnServer(
 
 async function parseMenuWithStrategy(images: ServerMenuImage[]): Promise<Menu> {
   const strategy = readParseStrategy();
+  const provider = readAiProvider();
 
   console.info("[menu-parse]", {
     event: "parse_strategy",
+    provider,
     strategy,
   });
 
-  if (strategy === "vision") {
-    return parseMenuWithMiMo(images);
+  if (strategy === "ocr_first") {
+    return parseMenuWithMiMoOcrFirst(images);
   }
 
-  try {
-    return await parseMenuWithMiMoOcrFirst(images);
-  } catch (error) {
-    if (!shouldFallbackToVision(error)) {
-      throw error;
-    }
-
-    console.warn("[menu-parse]", {
-      event: "fallback_to_vision",
-      code: error instanceof MiMoParserError ? error.code : "MIMO_PARSE_FAILED",
-      message: error instanceof Error ? error.message : "Unknown OCR-first parsing failure.",
-    });
-
-    return parseMenuWithMiMo(images, {
-      timeoutMs: 10_000,
-    });
-  }
+  return parseMenuWithMiMo(images);
 }
 
 function readParseStrategy(): ParseStrategy {
-  const value = readEnv("MIMO_PARSE_STRATEGY");
+  const value = readEnv("MENU_PARSE_STRATEGY");
 
-  if (value === "vision") {
-    return "vision";
+  if (value === "ocr_first") {
+    return "ocr_first";
   }
 
-  return "ocr_first";
+  return "vision";
 }
 
-function shouldFallbackToVision(error: unknown): boolean {
-  if (!(error instanceof MiMoParserError)) {
-    return true;
+function readAiProvider(): AiProvider {
+  const value = readEnv("MENU_AI_PROVIDER");
+
+  if (value !== "mimo" && value !== undefined) {
+    console.warn("[menu-parse]", {
+      event: "unsupported_provider_defaulted",
+      provider: value,
+      defaultProvider: "mimo",
+    });
   }
 
-  return (
-    error.code !== "SERVER_CONFIG" &&
-    error.code !== "MIMO_UNSUPPORTED_MODEL" &&
-    error.code !== "MIMO_TIMEOUT"
-  );
+  return "mimo";
 }
 
 function readEnv(name: string): string | undefined {

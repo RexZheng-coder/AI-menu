@@ -8,7 +8,7 @@ Restaurant menus can be hard to read when they are photographed, translated inco
 
 First, I start from the upload screen and choose a menu image. By default, the app uses a mock parsing layer, so the uploaded image returns a realistic prepared menu without spending API credits.
 
-The parsed result is displayed like a food ordering app: dishes are grouped by category, each item has English and Chinese names, Chinese descriptions, tags, spice level, price, and a subtle parse confidence score.
+The parsed result is displayed like a food ordering app: dishes are grouped by category, each item has English and Chinese names, description space when available, tags, spice level, price, and a subtle parse confidence score.
 
 Then I add a few dishes to the cart, adjust quantities, add notes like "less spicy" or "no onion", and generate a bilingual order summary that could be shown to a waiter.
 

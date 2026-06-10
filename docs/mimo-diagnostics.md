@@ -10,7 +10,9 @@ Create `.env.local` in the project root:
 MIMO_API_KEY=sk-your-pay-as-you-go-key
 MIMO_BASE_URL=https://api.xiaomimimo.com/v1
 MIMO_MODEL=mimo-v2.5
-MIMO_PARSE_STRATEGY=ocr_first
+MENU_AI_PROVIDER=mimo
+MENU_PARSE_STRATEGY=vision
+MAX_PARSE_IMAGES=2
 ```
 
 `.env.local` is ignored by Git. Do not commit real API keys or sample menu images.
@@ -47,6 +49,32 @@ It prints the HTTP status, response time, and the first 1000 characters of the r
 
 If the text test succeeds but the image test fails, the issue is likely model image support, the selected model, or the image payload format.
 
+## Single-Pass Menu Parse Test
+
+Run:
+
+```sh
+npm run test:mimo:menu -- ./sample-menu.jpg
+```
+
+This runs the current default real parser locally:
+
+```text
+image -> MiMo vision -> enriched bilingual JSON -> Menu conversion -> sanitizeMenu
+```
+
+It prints provider, model, original bytes, optimized bytes, duration, finish reason, content length, restaurant name, category count, and item count.
+
+## Fast Path / Preprocessing Test
+
+Run:
+
+```sh
+npm run test:mimo:menu:fast -- ./sample-menu.jpg
+```
+
+This uses the same parser path while highlighting preprocessing metadata. If optional `sharp` is not installed in the runtime, preprocessing safely falls back to no-op and reports identical original/optimized byte counts.
+
 ## OCR Text Test
 
 Run:
@@ -81,24 +109,26 @@ If OCR-first parsing succeeds but `/api/menus/parse` fails, inspect route logs a
 
 ## Strategy Selection
 
-Real mode uses `MIMO_PARSE_STRATEGY`:
+Real mode uses `MENU_AI_PROVIDER` and `MENU_PARSE_STRATEGY`:
 
-- `ocr_first`: default. Reads visible text first, then structures text into compact JSON.
-- `vision`: uses the previous direct image-to-menu parser.
+- `MENU_AI_PROVIDER=mimo`: default and currently supported vision provider.
+- `MENU_PARSE_STRATEGY=vision`: default single-pass MiMo image parser.
+- `MENU_PARSE_STRATEGY=ocr_first`: optional legacy pipeline that reads visible text first, then structures text into compact JSON.
 
-OCR-first is usually faster and more stable because image understanding and menu structuring are separated into smaller prompts. If OCR-first fails at runtime, the API logs `fallback_to_vision` and attempts the direct vision parser for non-timeout parser/provider failures. Configuration errors, unsupported-model errors, and OCR-first timeouts return directly so the route does not overrun the serverless budget.
+DeepSeek is not used for vision parsing in this app because `deepseek-v4-flash` rejected OpenAI-style `image_url` input during diagnostics.
 
 ## Result Guide
 
 - Text fails: key, base URL, model, account permission, or `api-key` header issue.
 - Text succeeds, image fails: image understanding model support or `image_url` payload issue.
+- Image succeeds, single-pass menu parse fails: inspect `AI_INVALID_JSON`, `EMPTY_MENU_EXTRACTION`, or MiMo timeout logs.
 - Image succeeds, OCR fails: photo clarity, small text, crop quality, model OCR behavior, or OCR phase timeout.
 - OCR succeeds, OCR-first parse fails: noisy extracted text, invalid/truncated JSON in text structuring, or structuring phase timeout.
-- OCR-first fails but vision succeeds: keep `MIMO_PARSE_STRATEGY=vision` temporarily and compare logs.
+- OCR-first fails but vision succeeds: keep `MENU_PARSE_STRATEGY=vision` and compare logs.
 - Both diagnostics succeed quickly: inspect `/api/menus/parse` logs for validation, sanitization, or menu-specific prompt failures.
 
 ## Limitations
 
 - OCR may miss small, blurred, cropped, or low-contrast text.
-- Chinese translation, tags, allergens, and spicy levels remain basic placeholders in real parsed menus.
-- Complex menus may still need retries, clearer photos, or the `vision` strategy.
+- MiMo-generated Chinese translation, tags, allergens, spicy level, and confidence may need correction.
+- Complex menus may still need retries, clearer photos, fewer uploaded pages, or temporary OCR-first comparison.

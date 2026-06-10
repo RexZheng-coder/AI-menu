@@ -40,7 +40,9 @@ Server-side MiMo variables:
 MIMO_API_KEY=sk-your-pay-as-you-go-key
 MIMO_BASE_URL=https://api.xiaomimimo.com/v1
 MIMO_MODEL=mimo-v2.5
-MIMO_PARSE_STRATEGY=ocr_first
+MENU_AI_PROVIDER=mimo
+MENU_PARSE_STRATEGY=vision
+MAX_PARSE_IMAGES=2
 ```
 
 Do not prefix these with frontend/public env names. They must stay server-side only.
@@ -100,7 +102,11 @@ The Vercel route `POST /api/menus/parse` accepts multipart image uploads from th
 
 API keys must stay server-side only in `MIMO_API_KEY`. Mock mode remains the default even when MiMo is configured. Real image parsing requires a MiMo model that supports image understanding; the default is `mimo-v2.5`.
 
-Real parsing supports `MIMO_PARSE_STRATEGY=ocr_first` or `MIMO_PARSE_STRATEGY=vision`. OCR-first is the default: MiMo extracts visible menu text first, then a text-only MiMo pass converts that text into lightweight menu JSON. This separation is usually faster and more stable than asking the vision model to read images and emit full structured menu data in one call. The old direct vision parser remains available as `vision` and is also used as a safe fallback for OCR-first failures that are not configuration, unsupported-model, or timeout errors.
+Real parsing defaults to `MENU_AI_PROVIDER=mimo` and `MENU_PARSE_STRATEGY=vision`. This single-pass MiMo vision parser reads uploaded images and returns enriched bilingual menu JSON with Chinese item names, visible prices, tags, allergens, spicy level, confidence, and conservative description fields. The fast prompt may leave descriptions empty on dense menus to keep responses inside the serverless time budget. OCR-first remains available only when explicitly selected with `MENU_PARSE_STRATEGY=ocr_first`.
+
+DeepSeek is not used for vision parsing because the current DeepSeek API/model rejected OpenAI-style `image_url` input in diagnostics.
+
+The route processes only the first `MAX_PARSE_IMAGES` uploads, defaulting to 2, to keep latency and provider cost predictable. Server-side preprocessing logs original bytes, optimized bytes, and a SHA-256 hash prefix. If optional `sharp` is not available, preprocessing is a safe no-op fallback.
 
 The parser is implemented as a Vercel Node.js Serverless Function, not an Edge Function. `vercel.json` sets `/api/menus/parse` to a 30-second maximum duration, and the route has an app-level timeout so the API can return structured JSON before Vercel stops the function:
 
@@ -134,13 +140,13 @@ This means Vercel stopped the function because it did not return in time. For re
 The app now uses a Node.js function plus an app-level MiMo timeout so slow provider responses should return `MIMO_TIMEOUT` JSON before Vercel's platform timeout. If you still see a platform 504:
 
 - Upload one smaller, clearer image and retry.
-- Check Vercel function logs for `route_start`, `method_checked`, `content_type_checked`, `formdata_start`, `formdata_done`, `images_extracted`, `image_conversion_start`, `image_conversion_done`, `parse_strategy`, `ocr_start`, `ocr_done`, `structure_start`, `structure_done`, `fallback_to_vision`, `mimo_request_start`, `mimo_response_status`, `sanitize_start`, `sanitize_done`, `route_success`, or `route_error`.
+- Check Vercel function logs for `route_start`, `method_checked`, `content_type_checked`, `formdata_start`, `formdata_done`, `images_extracted`, `images_limited`, `image_conversion_start`, `image_conversion_done`, `parse_strategy`, `mimo_input_summary`, `mimo_request_start`, `mimo_response_status`, `mimo_response_summary`, `sanitize_start`, `sanitize_done`, `route_success`, or `route_error`.
 - For upload parsing specifically, open the app with `?parse=real&debug=1` and confirm `/api/menus/parse?debug=1` returns `imageCount`, `totalBytes`, and `fileTypes`.
 - Check MiMo service latency and model availability.
 - Confirm the selected `MIMO_MODEL` supports image understanding.
 - Confirm you are using a pay-as-you-go `sk-xxxxx` key with `https://api.xiaomimimo.com/v1`, not Token Plan credentials/base URLs.
 - Try a faster/smaller model through `MIMO_MODEL` if available.
-- Try `MIMO_PARSE_STRATEGY=vision` if OCR-first repeatedly misses text on a specific menu.
+- Try a smaller/clearer image, reduce `MAX_PARSE_IMAGES`, or temporarily test `MENU_PARSE_STRATEGY=ocr_first` if single-pass vision repeatedly fails on a specific menu.
 - Confirm the deployed build includes the latest Node function changes.
 
 ## Netlify Limitation
