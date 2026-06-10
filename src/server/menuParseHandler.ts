@@ -39,6 +39,7 @@ export type ParseMetadata = {
   provider: "mimo";
   recovered_from_truncation: boolean;
   retry_used: boolean;
+  dense_fallback_used: boolean;
   duration_ms: number | null;
 };
 
@@ -92,6 +93,7 @@ function createParseMetadata(menu: Menu): ParseMetadata {
     provider: "mimo",
     recovered_from_truncation: diagnostics?.recoveredFromTruncation ?? false,
     retry_used: (diagnostics?.retryCount ?? 0) > 0,
+    dense_fallback_used: diagnostics?.denseFallbackUsed ?? false,
     duration_ms: diagnostics?.durationMs ?? null,
   };
 }

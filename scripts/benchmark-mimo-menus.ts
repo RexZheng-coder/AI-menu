@@ -34,6 +34,7 @@ type BenchmarkRow = {
   finish_reason: string;
   recovered_from_truncation: string;
   retry_used: string;
+  dense_fallback_used: string;
   error_code: string;
 };
 
@@ -70,6 +71,7 @@ for (const file of sampleFiles) {
       finish_reason: menuDiagnostics?.finishReason ?? chatDiagnostics?.finishReason ?? "unknown",
       recovered_from_truncation: String(menuDiagnostics?.recoveredFromTruncation ?? false),
       retry_used: String((menuDiagnostics?.retryCount ?? 0) > 0),
+      dense_fallback_used: String(menuDiagnostics?.denseFallbackUsed ?? false),
       error_code: "",
     });
   } catch (error) {
@@ -87,6 +89,7 @@ for (const file of sampleFiles) {
       finish_reason: chatDiagnostics?.finishReason ?? "unknown",
       recovered_from_truncation: String(getLastMiMoMenuParseDiagnostics()?.recoveredFromTruncation ?? false),
       retry_used: String((getLastMiMoMenuParseDiagnostics()?.retryCount ?? 0) > 0),
+      dense_fallback_used: String(getLastMiMoMenuParseDiagnostics()?.denseFallbackUsed ?? false),
       error_code: readErrorCode(error),
     });
   }

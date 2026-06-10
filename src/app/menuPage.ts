@@ -172,6 +172,7 @@ function renderQualityAndSourcePanel(menu: Menu): HTMLElement {
     provider: menu.metadata.source_type === "mock" ? "mock" : "mimo",
     recovered_from_truncation: false,
     retry_used: false,
+    dense_fallback_used: false,
     duration_ms: null,
   };
 
@@ -191,6 +192,13 @@ function renderQualityAndSourcePanel(menu: Menu): HTMLElement {
     warning.className = "quality-panel__warning";
     warning.textContent = "Some items may be missing or inaccurate. Try uploading a clearer or cropped image if anything looks off.";
     copy.append(warning);
+  }
+
+  if (metadata.dense_fallback_used) {
+    const denseNote = document.createElement("p");
+    denseNote.className = "quality-panel__warning";
+    denseNote.textContent = "Dense menu detected. Parsed core item information only.";
+    copy.append(denseNote);
   }
 
   const compareButton = document.createElement("button");
@@ -963,6 +971,7 @@ function createMockQuality(menu: Menu): ClientParseMetadata {
     provider: menu.metadata.source_type === "mock" ? "mock" : "local",
     recovered_from_truncation: false,
     retry_used: false,
+    dense_fallback_used: false,
     duration_ms: null,
   };
 }

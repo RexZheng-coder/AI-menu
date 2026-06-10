@@ -92,7 +92,7 @@ Run:
 npm run benchmark:mimo:menus
 ```
 
-This checks available local sample images and prints a table with file, parse detail, duration, restaurant name, category count, item count, price coverage, Chinese-name coverage, finish reason, truncation recovery status, retry usage, and error code if parsing fails. It never prints API keys or image base64.
+This checks available local sample images and prints a table with file, parse detail, duration, restaurant name, category count, item count, price coverage, Chinese-name coverage, finish reason, truncation recovery status, retry usage, dense fallback usage, and error code if parsing fails. It never prints API keys or image base64.
 
 See `docs/benchmarking.md` for the regression workflow and quality interpretation.
 

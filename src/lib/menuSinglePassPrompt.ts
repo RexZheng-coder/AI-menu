@@ -85,25 +85,19 @@ export const MENU_SINGLE_PASS_BALANCED_PROMPT = `${MENU_SINGLE_PASS_ACCURATE_PRO
 Balanced mode:
 Prefer complete item coverage. Keep descriptions null unless they are very short. Use at most one tag per item. Do not omit readable item names or prices to save space.`;
 
-export const MENU_SINGLE_PASS_ACCURATE_RUNTIME_PROMPT = `Analyze the menu image and return one complete valid JSON object.
-Do not think step by step. Do not explain. Do not use markdown.
+export const MENU_SINGLE_PASS_ACCURATE_RUNTIME_PROMPT = `Read the menu image and return final minified JSON only. Do not think step by step. Do not explain. Do not use markdown.
 
-Accuracy-first:
-- Extract every readable visible menu section and item, in top-to-bottom and left-to-right order.
-- Do not summarize, sample, or stop after the first sections.
-- Do not intentionally skip visible items.
-- Preserve item names and price_raw exactly when possible.
-- Translate every item name into concise Chinese.
-- Keep each item compact. Only name_en, name_zh, and price_raw are required in each item.
-- Omit optional item fields when they would reduce item coverage. The backend will default missing optional fields.
-- If no category heading is visible, use "Menu" and "菜单".
+Accuracy-first means complete item coverage:
+- Extract every readable visible menu item in reading order.
+- Do not summarize, sample, or intentionally skip visible items.
+- Preserve categories, item names, and price_raw exactly when possible.
+- Translate every item name into concise natural Chinese.
+- Each item only needs name_en, name_zh, and price_raw. Omit optional fields so more items fit.
+- Backend will default descriptions, tags, allergens, spicy_level, and confidence.
+- Use name_en "Menu" and name_zh "菜单" if no category heading is visible.
 - If nothing can be read, return {"restaurant_name":null,"cuisine_type":null,"categories":[]}.
 
-Priority: item name_en, price_raw, category, name_zh, then optional fields.
-Compact item example:
-{"name_en":"GARLIC BREAD","name_zh":"蒜香面包","price_raw":"5.0(M) | 8.0(NM)"}
-
-Output shape may be compact:
+Compact shape:
 {"restaurant_name":string|null,"cuisine_type":string|null,"categories":[{"name_en":string,"name_zh":string,"items":[{"name_en":string,"name_zh":string,"price_raw":string|null}]}]}`;
 
 export const MENU_SINGLE_PASS_FAST_PROMPT = `Read the menu image and return final minified JSON only. Do not think step by step. Do not explain. Do not use markdown.
@@ -126,3 +120,21 @@ Return compact minified JSON only. Do not include markdown or prose. Preserve al
 export const MENU_SINGLE_PASS_LOW_COUNT_RETRY_PROMPT = `${MENU_SINGLE_PASS_COMPACT_RETRY_PROMPT}
 
 The previous response returned too few items. Re-scan the whole image and include all readable sections/items, especially later sections near the bottom/right side.`;
+
+export const MENU_SINGLE_PASS_DENSE_FALLBACK_PROMPT = `Analyze the uploaded restaurant menu image and return compact minified JSON only.
+This is a dense menu fallback. Prioritize core item coverage over rich metadata.
+
+Rules:
+- Extract all readable visible categories and menu items in reading order.
+- Do not summarize or sample items.
+- For each category include only name_en, name_zh, and items.
+- For each item include only name_en, name_zh, and price_raw.
+- Preserve price_raw exactly as shown.
+- Translate item names into concise natural Chinese.
+- Use null for unclear or missing prices.
+- Do not include descriptions, tags, allergens, spicy_level, confidence, markdown, comments, or explanations.
+- If no category heading is visible, use "Menu" and "菜单".
+- If nothing can be read, return {"restaurant_name":null,"cuisine_type":null,"categories":[]}.
+
+Compact shape:
+{"restaurant_name":string|null,"cuisine_type":string|null,"categories":[{"name_en":string,"name_zh":string,"items":[{"name_en":string,"name_zh":string,"price_raw":string|null}]}]}`;

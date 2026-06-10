@@ -240,6 +240,12 @@ function parsePartialExtractionFromText(text: string): LightweightMenuExtraction
     const categoryJson = readCompleteJsonObjectAt(trimmedText, categoryStart);
 
     if (!categoryJson) {
+      const partialCategory = readPartialCategoryAt(trimmedText, categoryStart);
+
+      if (partialCategory) {
+        categories.push(partialCategory);
+      }
+
       break;
     }
 
@@ -257,6 +263,59 @@ function parsePartialExtractionFromText(text: string): LightweightMenuExtraction
     cuisine_type: readNullableJsonStringField(trimmedText, "cuisine_type"),
     categories,
   });
+}
+
+function readPartialCategoryAt(text: string, start: number): Record<string, unknown> | null {
+  const remainingText = text.slice(start);
+  const itemsFieldIndex = remainingText.indexOf("\"items\"");
+
+  if (itemsFieldIndex < 0) {
+    return null;
+  }
+
+  const categoryHeaderText = remainingText.slice(0, itemsFieldIndex);
+  const itemsArrayStart = remainingText.indexOf("[", itemsFieldIndex);
+
+  if (itemsArrayStart < 0) {
+    return null;
+  }
+
+  const items: unknown[] = [];
+  let cursor = itemsArrayStart + 1;
+
+  while (cursor < remainingText.length) {
+    const itemStart = remainingText.indexOf("{", cursor);
+
+    if (itemStart < 0) {
+      break;
+    }
+
+    const itemJson = readCompleteJsonObjectAt(remainingText, itemStart);
+
+    if (!itemJson) {
+      break;
+    }
+
+    try {
+      items.push(JSON.parse(itemJson.text) as unknown);
+    } catch {
+      break;
+    }
+
+    cursor = itemJson.endIndex + 1;
+  }
+
+  if (items.length === 0) {
+    return null;
+  }
+
+  const nameEn = readNullableJsonStringField(categoryHeaderText, "name_en") ?? "Menu";
+
+  return {
+    name_en: nameEn,
+    name_zh: readNullableJsonStringField(categoryHeaderText, "name_zh") ?? nameEn,
+    items,
+  };
 }
 
 function stripCodeFence(text: string): string {

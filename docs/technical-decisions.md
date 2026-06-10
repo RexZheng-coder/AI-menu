@@ -31,6 +31,8 @@ DeepSeek `deepseek-v4-flash` diagnostics rejected the OpenAI-style `image_url` p
 
 `fast` and `balanced` modes exist for latency comparison and demos, but they should not be treated as production-quality defaults for dense menus.
 
+For very dense menus, the parser can retry with a compact dense-menu fallback prompt. That fallback asks only for category name, English item name, Chinese item name, and raw price. The backend fills safe defaults for optional fields through the existing conversion and sanitization path, and the frontend quality panel warns that core item information was parsed only.
+
 ## Human Correction UX
 
 AI parsing can be incomplete or wrong. The frontend therefore includes:

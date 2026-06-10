@@ -29,11 +29,12 @@ The table reports:
 - `finish_reason`: provider finish reason when available.
 - `recovered_from_truncation`: whether partial JSON recovery was used.
 - `retry_used`: whether the completeness retry path ran.
+- `dense_fallback_used`: whether dense-menu compact fallback returned core item fields only.
 - `error_code`: structured failure code if parsing failed.
 
 ## What Good Looks Like
 
-For the main sample menu, accurate mode should stay near the prior completeness benchmark of roughly 7+ categories and 25+ items. Exact counts can vary by model response, but a sudden drop in item count, price count, or Chinese-name coverage should be treated as a regression.
+For the main sample menu, accurate mode should stay near the prior completeness benchmark of roughly 7+ categories and 25+ items. Exact counts can vary by model response, but a sudden drop in item count, price count, or Chinese-name coverage should be treated as a regression. Dense-menu fallback usage is acceptable for very dense images if it prevents `AI_INVALID_JSON` and preserves core item/price coverage.
 
 Prioritize item coverage in this order:
 

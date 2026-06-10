@@ -1,7 +1,9 @@
 .env
 .env.local
+.DS_Store
 dist/
 node_modules/
 test-results/
 menu-page-screenshot.png
 .vercel
+sample menu/

@@ -14,6 +14,7 @@ export type ClientParseMetadata = {
   provider: string;
   recovered_from_truncation: boolean;
   retry_used: boolean;
+  dense_fallback_used: boolean;
   duration_ms: number | null;
 };
 
@@ -311,6 +312,7 @@ function readParseMetadata(body: Record<string, unknown>, menu: Menu): ClientPar
     provider: asString(metadata.provider) ?? "mimo",
     recoveredFromTruncation: metadata.recovered_from_truncation === true,
     retryUsed: metadata.retry_used === true,
+    denseFallbackUsed: metadata.dense_fallback_used === true,
     durationMs: asNumber(metadata.duration_ms) ?? null,
   });
 }
@@ -322,6 +324,7 @@ function createClientMetadata(
     provider: string;
     recoveredFromTruncation?: boolean;
     retryUsed?: boolean;
+    denseFallbackUsed?: boolean;
     durationMs?: number | null;
   },
 ): ClientParseMetadata {
@@ -332,6 +335,7 @@ function createClientMetadata(
     provider: options.provider,
     recovered_from_truncation: options.recoveredFromTruncation ?? false,
     retry_used: options.retryUsed ?? false,
+    dense_fallback_used: options.denseFallbackUsed ?? false,
     duration_ms: options.durationMs ?? null,
   };
 }

@@ -2,6 +2,7 @@ import type { Menu } from "../types/menu.js";
 import {
   MENU_SINGLE_PASS_ACCURATE_RUNTIME_PROMPT,
   MENU_SINGLE_PASS_BALANCED_PROMPT,
+  MENU_SINGLE_PASS_DENSE_FALLBACK_PROMPT,
   MENU_SINGLE_PASS_FAST_PROMPT,
   MENU_SINGLE_PASS_LOW_COUNT_RETRY_PROMPT,
   MENU_SINGLE_PASS_SYSTEM_PROMPT,
@@ -35,6 +36,7 @@ export type MiMoMenuParseDiagnostics = {
   contentLength: number;
   recoveredFromTruncation: boolean;
   retryCount: number;
+  denseFallbackUsed: boolean;
 };
 
 type DetailConfig = {
@@ -51,6 +53,8 @@ type ParseAttemptResult = {
   contentLength: number;
   recoveredFromTruncation: boolean;
 };
+
+type RetryKind = "dense_fallback" | "low_count";
 
 let lastMiMoMenuParseDiagnostics: MiMoMenuParseDiagnostics | null = null;
 
@@ -125,6 +129,7 @@ export async function parseMenuWithMiMo(
         recoveredFromTruncation: false,
       },
       0,
+      false,
     )),
     durationMs: Date.now() - startedAt,
     categoryCount: menu.categories.length,
@@ -155,8 +160,10 @@ async function parseExtractionWithRetry(options: {
     };
     assertExtractionHasItems(parsed.extraction);
 
-    if (!shouldRetryForCompleteness(parsedAttempt, options.detailConfig)) {
-      lastMiMoMenuParseDiagnostics = createMenuDiagnostics(options.detailConfig, options.startedAt, parsedAttempt, 0);
+    const retryKind = getRetryKindForAttempt(parsedAttempt, options.detailConfig);
+
+    if (!retryKind) {
+      lastMiMoMenuParseDiagnostics = createMenuDiagnostics(options.detailConfig, options.startedAt, parsedAttempt, 0, false);
       return parsed.extraction;
     }
   } catch (error) {
@@ -171,6 +178,12 @@ async function parseExtractionWithRetry(options: {
         { status: 400, cause: error },
       );
     }
+
+    return requestRetryExtraction({
+      ...options,
+      retryKind: "dense_fallback",
+      retryReason: options.finishReason === "length" ? "length" : "invalid_json",
+    });
   }
 
   if (!shouldRetryExtraction(options.startedAt, options.detailConfig)) {
@@ -183,7 +196,7 @@ async function parseExtractionWithRetry(options: {
         finishReason: parsedAttempt.finishReason,
         recoveredFromTruncation: parsedAttempt.recoveredFromTruncation,
       });
-      lastMiMoMenuParseDiagnostics = createMenuDiagnostics(options.detailConfig, options.startedAt, parsedAttempt, 0);
+      lastMiMoMenuParseDiagnostics = createMenuDiagnostics(options.detailConfig, options.startedAt, parsedAttempt, 0, false);
       return parsedAttempt.extraction;
     }
 
@@ -194,21 +207,39 @@ async function parseExtractionWithRetry(options: {
     );
   }
 
-  console.info("[menu-parse]", {
-    event: "mimo_retry_accuracy_prompt",
-    detail: options.detailConfig.detail,
-    reason: parsedAttempt
+  const retryKind = parsedAttempt ? getRetryKindForAttempt(parsedAttempt, options.detailConfig) : "dense_fallback";
+  return requestRetryExtraction({
+    ...options,
+    retryKind: retryKind ?? "dense_fallback",
+    retryReason: parsedAttempt
       ? createCompletenessRetryReason(parsedAttempt, options.detailConfig)
       : options.finishReason === "length"
         ? "length"
         : "invalid_json",
   });
+}
+
+async function requestRetryExtraction(options: {
+  startedAt: number;
+  config: ReturnType<typeof createMiMoConfig>;
+  images: ServerMenuImage[];
+  detailConfig: DetailConfig;
+  retryKind: RetryKind;
+  retryReason: string;
+}): Promise<LightweightMenuExtraction> {
+  const denseFallbackUsed = options.retryKind === "dense_fallback";
+
+  console.info("[menu-parse]", {
+    event: denseFallbackUsed ? "mimo_retry_dense_fallback_prompt" : "mimo_retry_accuracy_prompt",
+    detail: options.detailConfig.detail,
+    reason: options.retryReason,
+  });
   const retryResult = await requestMenuExtraction({
     config: options.config,
     images: options.images,
-    userPrompt: MENU_SINGLE_PASS_LOW_COUNT_RETRY_PROMPT,
-    maxCompletionTokens: Math.max(options.detailConfig.maxCompletionTokens, 4500),
-    logLabel: "mimo_retry",
+    userPrompt: denseFallbackUsed ? MENU_SINGLE_PASS_DENSE_FALLBACK_PROMPT : MENU_SINGLE_PASS_LOW_COUNT_RETRY_PROMPT,
+    maxCompletionTokens: denseFallbackUsed ? 2200 : Math.max(options.detailConfig.maxCompletionTokens, 4500),
+    logLabel: denseFallbackUsed ? "mimo_dense_fallback" : "mimo_retry",
   });
 
   try {
@@ -221,7 +252,13 @@ async function parseExtractionWithRetry(options: {
       contentLength: retryResult.outputText.length,
       recoveredFromTruncation: retryParsed.recoveredFromTruncation,
     };
-    lastMiMoMenuParseDiagnostics = createMenuDiagnostics(options.detailConfig, options.startedAt, retryAttempt, 1);
+    lastMiMoMenuParseDiagnostics = createMenuDiagnostics(
+      options.detailConfig,
+      options.startedAt,
+      retryAttempt,
+      1,
+      denseFallbackUsed,
+    );
     return retryParsed.extraction;
   } catch (error) {
     if (error instanceof MiMoParserError && error.code === "EMPTY_MENU_EXTRACTION") {
@@ -332,15 +369,19 @@ function readParseDetail(): MenuParseDetail {
 }
 
 function shouldRetryForCompleteness(attempt: ParseAttemptResult, detailConfig: DetailConfig): boolean {
+  return getRetryKindForAttempt(attempt, detailConfig) !== null;
+}
+
+function getRetryKindForAttempt(attempt: ParseAttemptResult, detailConfig: DetailConfig): RetryKind | null {
   if (detailConfig.detail !== "accurate") {
-    return attempt.finishReason === "length" || attempt.recoveredFromTruncation;
+    return attempt.finishReason === "length" || attempt.recoveredFromTruncation ? "dense_fallback" : null;
   }
 
-  return (
-    countItems(attempt.extraction) < detailConfig.lowItemRetryThreshold ||
-    attempt.finishReason === "length" ||
-    attempt.recoveredFromTruncation
-  );
+  if (attempt.finishReason === "length" || attempt.recoveredFromTruncation) {
+    return "dense_fallback";
+  }
+
+  return countItems(attempt.extraction) < detailConfig.lowItemRetryThreshold ? "low_count" : null;
 }
 
 function createCompletenessRetryReason(attempt: ParseAttemptResult, detailConfig: DetailConfig): string {
@@ -361,7 +402,7 @@ function createCompletenessRetryReason(attempt: ParseAttemptResult, detailConfig
 
 function shouldRetryExtraction(startedAt: number, detailConfig: DetailConfig): boolean {
   const elapsedMs = Date.now() - startedAt;
-  const retryBudgetMs = detailConfig.detail === "accurate" ? 9_000 : 8_000;
+  const retryBudgetMs = detailConfig.detail === "accurate" ? 22_000 : 12_000;
   return elapsedMs < retryBudgetMs;
 }
 
@@ -370,6 +411,7 @@ function createMenuDiagnostics(
   startedAt: number,
   attempt: ParseAttemptResult,
   retryCount: number,
+  denseFallbackUsed: boolean,
 ): MiMoMenuParseDiagnostics {
   return {
     detail: detailConfig.detail,
@@ -380,6 +422,7 @@ function createMenuDiagnostics(
     contentLength: attempt.contentLength,
     recoveredFromTruncation: attempt.recoveredFromTruncation,
     retryCount,
+    denseFallbackUsed,
   };
 }
 

@@ -14,6 +14,12 @@ TBD
 
 The app is deployment-ready as a static-first MVP with a Vercel serverless parser. The root route `/` and `/?parse=real` use real MiMo parsing; `/?parse=mock` forces the sample menu flow without API cost.
 
+Route modes:
+
+- `/`: Real AI Mode by default.
+- `/?parse=real`: Explicit Real AI Mode.
+- `/?parse=mock`: Mock Demo Mode with no AI API call.
+
 ## MVP Features
 
 - Upload-first flow for menu images
@@ -82,6 +88,7 @@ Real AI parsing is available only through the serverless API route and is the de
 - `POST /api/menus/parse` accepts uploaded image files and calls Xiaomi MiMo from server-side code only.
 - Real mode defaults to accuracy-first MiMo direct vision: `MENU_AI_PROVIDER=mimo`, `MENU_PARSE_STRATEGY=vision`, and `MENU_PARSE_DETAIL=accurate`.
 - `MENU_PARSE_DETAIL=fast | balanced | accurate` controls the speed/completeness tradeoff. Accurate is slower but preserves more visible menu items.
+- Dense menus can fall back to a compact core-fields parse that prioritizes category, English name, Chinese name, and raw price.
 - OCR-first remains available only when explicitly selected with `MENU_PARSE_STRATEGY=ocr_first`.
 - DeepSeek is not used for vision parsing because the current DeepSeek API/model rejected `image_url` input in diagnostics.
 - Server-side MiMo parser modules, enriched single-pass prompts, and sanitization utilities exist under `src/server/*`, `api/*`, and `src/lib/*`.
@@ -194,11 +201,21 @@ npm run benchmark:mimo:menus
 
 ## Screenshots
 
-Screenshot placeholder:
+No committed screenshots are included yet. Suggested portfolio captures:
 
-- Add committed screenshots here when final portfolio images are selected.
+- Upload screen in Real AI Mode
+- Parsed bilingual menu with quality panel and original-image comparison
+- Cart with notes and copied order summary
 
 The current generated screenshot file is ignored by Git and is not referenced directly in this README.
+
+## Privacy / API Usage
+
+- Real AI Mode sends uploaded images to the configured server-side AI provider for parsing.
+- Uploaded images are not stored by this app.
+- Mock Demo Mode does not call the AI API.
+- API keys stay server-side in Vercel environment variables and are never exposed in browser code.
+- Real parsing may incur provider cost, so use non-sensitive test images unless your deployment and provider account are approved for the content.
 
 ## Current Limitations
 
@@ -212,6 +229,7 @@ The current generated screenshot file is ignored by Git and is not referenced di
 - Local item editing is browser-only and intended as a correction UX prototype, not a persisted moderation workflow.
 - OCR-first may miss tiny, blurred, cropped, or low-contrast text.
 - Real-mode vision parsing defaults to item coverage first. Dense menus may leave descriptions, tags, or allergens empty so more visible item names and prices are preserved.
+- If dense fallback is used, the frontend quality panel shows that core item information was parsed only.
 - Chinese translations, tags, allergens, spicy levels, and confidence values are AI-generated and may need user correction in a production system.
 - Very dense or complex menus may still need retries, clearer photos, `MENU_PARSE_DETAIL=fast` for demos, or temporary OCR-first comparison.
 - Image preprocessing is a safe no-op unless an optional `sharp` runtime is available.

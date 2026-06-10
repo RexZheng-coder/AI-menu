@@ -71,7 +71,7 @@ export function renderUploadPanel(props: UploadPanelProps): HTMLElement {
   const privacyNote = document.createElement("p");
   privacyNote.className = "upload-guidance__note";
   privacyNote.textContent = props.isRealMode
-    ? "Real AI mode sends uploaded images to the configured AI API."
+    ? "Uploaded images are sent to the configured AI provider for parsing and are not stored by this app."
     : "Mock demo mode uses a sample menu and does not call the AI API.";
 
   guidance.append(guidanceTitle, tips, privacyNote);
