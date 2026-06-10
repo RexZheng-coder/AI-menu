@@ -1,7 +1,14 @@
 import { renderTagPill } from "./TagPill.js";
 import type { MenuItem } from "../types/menu.js";
 
-export function renderMenuItemCard(item: MenuItem, onAddToCart: (item: MenuItem) => void): HTMLElement {
+export function renderMenuItemCard(
+  item: MenuItem,
+  actions: {
+    onAddToCart: (item: MenuItem) => void;
+    onEditItem: (item: MenuItem) => void;
+    onDeleteItem: (itemId: string) => void;
+  },
+): HTMLElement {
   const article = document.createElement("article");
   article.className = "item-card";
 
@@ -65,9 +72,27 @@ export function renderMenuItemCard(item: MenuItem, onAddToCart: (item: MenuItem)
   addButton.type = "button";
   addButton.textContent = "+";
   addButton.setAttribute("aria-label", `Add ${item.name_zh}`);
-  addButton.addEventListener("click", () => onAddToCart(item));
+  addButton.addEventListener("click", () => actions.onAddToCart(item));
 
-  article.append(content, addButton);
+  const actionColumn = document.createElement("div");
+  actionColumn.className = "item-card__actions";
+
+  const editButton = document.createElement("button");
+  editButton.className = "item-edit-button";
+  editButton.type = "button";
+  editButton.textContent = "Edit";
+  editButton.setAttribute("aria-label", `Edit ${item.name_zh}`);
+  editButton.addEventListener("click", () => actions.onEditItem(item));
+
+  const deleteButton = document.createElement("button");
+  deleteButton.className = "item-delete-button";
+  deleteButton.type = "button";
+  deleteButton.textContent = "Delete";
+  deleteButton.setAttribute("aria-label", `Delete ${item.name_zh}`);
+  deleteButton.addEventListener("click", () => actions.onDeleteItem(item.item_id));
+
+  actionColumn.append(addButton, editButton, deleteButton);
+  article.append(content, actionColumn);
   return article;
 }
 

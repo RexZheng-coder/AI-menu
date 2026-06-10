@@ -214,6 +214,7 @@ export default async function handler(request: NodeRequest, response: NodeRespon
     responder.sendJson({
       ok: true,
       menu: parseResponse.menu,
+      parse_metadata: parseResponse.parse_metadata,
     });
   } catch (error) {
     responder.sendError(

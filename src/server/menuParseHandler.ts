@@ -1,6 +1,11 @@
 import { validateMenuHasItems } from "../lib/menuValidation.js";
 import { createServerMenuImages, type ServerMenuImage, type ServerUploadedImageFile } from "./menuImageInput.js";
-import { MiMoParserError, parseMenuWithMiMo, type MiMoParserErrorCode } from "./mimoMenuParser.js";
+import {
+  getLastMiMoMenuParseDiagnostics,
+  MiMoParserError,
+  parseMenuWithMiMo,
+  type MiMoParserErrorCode,
+} from "./mimoMenuParser.js";
 import { parseMenuWithMiMoOcrFirst } from "./mimoOcrMenuParser.js";
 import type { Menu } from "../types/menu.js";
 
@@ -18,6 +23,7 @@ export type ParseMenuResponse =
   | {
       ok: true;
       menu: Menu;
+      parse_metadata: ParseMetadata;
     }
   | {
       ok: false;
@@ -25,6 +31,16 @@ export type ParseMenuResponse =
       status?: number;
       error: string;
     };
+
+export type ParseMetadata = {
+  item_count: number;
+  category_count: number;
+  parse_detail: string;
+  provider: "mimo";
+  recovered_from_truncation: boolean;
+  retry_used: boolean;
+  duration_ms: number | null;
+};
 
 type ParseStrategy = "ocr_first" | "vision";
 type AiProvider = "mimo";
@@ -46,6 +62,7 @@ export async function parseMenuImagesOnServer(request: ParseMenuRequest): Promis
     return {
       ok: true,
       menu,
+      parse_metadata: createParseMetadata(menu),
     };
   } catch (error) {
     if (error instanceof MiMoParserError) {
@@ -63,6 +80,20 @@ export async function parseMenuImagesOnServer(request: ParseMenuRequest): Promis
       error: error instanceof Error ? error.message : "Menu parsing failed. Please try again.",
     };
   }
+}
+
+function createParseMetadata(menu: Menu): ParseMetadata {
+  const diagnostics = getLastMiMoMenuParseDiagnostics();
+
+  return {
+    item_count: menu.categories.reduce((sum, category) => sum + category.items.length, 0),
+    category_count: menu.categories.length,
+    parse_detail: diagnostics?.detail ?? readParseDetail(),
+    provider: "mimo",
+    recovered_from_truncation: diagnostics?.recoveredFromTruncation ?? false,
+    retry_used: (diagnostics?.retryCount ?? 0) > 0,
+    duration_ms: diagnostics?.durationMs ?? null,
+  };
 }
 
 export async function parseUploadedMenuFilesOnServer(

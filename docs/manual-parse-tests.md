@@ -7,29 +7,31 @@ npm run build
 npm run start
 ```
 
-Open `http://127.0.0.1:4173/`.
+Open `http://127.0.0.1:4173/` for real mode when a Vercel API route is available. Open `http://127.0.0.1:4173/?parse=mock` for static mock tests.
 
 ## Mock Success
 
-1. Upload a `.jpg`, `.jpeg`, `.png`, or `.webp` file.
-2. Confirm the button is enabled.
-3. Click `Scan Menu`.
-4. Confirm the phase text moves through uploading/parsing and the Lantern House menu renders.
-5. Add a dish, generate an order summary, and confirm the cart still works.
+1. Open `http://127.0.0.1:4173/?parse=mock`.
+2. Upload a `.jpg`, `.jpeg`, `.png`, or `.webp` file.
+3. Confirm the button is enabled.
+4. Click `Scan Menu`.
+5. Confirm the phase text moves through uploading/parsing and the Lantern House menu renders.
+6. Add a dish, generate an order summary, and confirm the cart still works.
 
 ## Mock Failure
 
-1. Upload an image file with `fail` in the file name, such as `fail-menu.png`.
-2. Click `Scan Menu`.
-3. Confirm a friendly error appears.
-4. Click `Retry` to retry with the same file, or `Clear` to start over.
+1. Open `http://127.0.0.1:4173/?parse=mock`.
+2. Upload an image file with `fail` in the file name, such as `fail-menu.png`.
+3. Click `Scan Menu`.
+4. Confirm a friendly error appears.
+5. Click `Retry` to retry with the same file, or `Clear` to start over.
 
-## Real Mode Missing Backend
+## Real Mode Missing Backend Or Env
 
-1. Open `http://127.0.0.1:4173/?parse=real`.
+1. Open `http://127.0.0.1:4173/` or `http://127.0.0.1:4173/?parse=real`.
 2. Upload a valid image.
 3. Click `Scan Menu`.
-4. Confirm the app reports that real parsing is not available because the backend route is not configured.
+4. Confirm the app reports that real parsing is not available or not configured and offers Mock Demo Mode.
 
 ## Invalid File Type
 

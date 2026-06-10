@@ -6,13 +6,13 @@ A TypeScript MVP for turning menu photo uploads into a structured bilingual orde
 
 Restaurant menus can be hard to read when they are photographed, handwritten, poorly translated, or written in an unfamiliar language. This project explores a practical menu assistant flow: upload menu photos, parse menu content into a typed data model, translate it into Chinese, browse dishes by category, and build an order summary that can be shown to a waiter.
 
-The current app demonstrates the full frontend experience using mock parsing by default, with an optional Vercel serverless MiMo parser available through the same frontend seam.
+The current app defaults to the real MiMo-backed parsing path when the serverless API is configured, while keeping an explicit mock demo mode for portfolio walkthroughs and offline UI testing.
 
 ## Live Demo
 
 TBD
 
-The app is deployment-ready as a static-first MVP. By default, uploaded menu images intentionally return the mock parsed menu so the full frontend flow can be demonstrated without API cost. Real parsing is opt-in with `?parse=real` after the Vercel MiMo environment variables are configured.
+The app is deployment-ready as a static-first MVP with a Vercel serverless parser. The root route `/` and `/?parse=real` use real MiMo parsing; `/?parse=mock` forces the sample menu flow without API cost.
 
 ## MVP Features
 
@@ -21,9 +21,12 @@ The app is deployment-ready as a static-first MVP. By default, uploaded menu ima
 - Bilingual menu display with English and Chinese names/descriptions
 - Category-based menu rendering
 - Dish cards with price, Chinese tags, spicy level, and subtle confidence display
+- AI parsing quality panel with category/item counts, provider/detail metadata, and retry/truncation hints
+- Original image comparison for the current upload session
+- Local human correction flow to edit, add, or delete parsed dishes before ordering
 - Cart with quantity controls
 - Per-item notes such as `less spicy`, `no onion`, or `少辣`
-- Bilingual order summary suitable to show a waiter
+- Bilingual/English/Chinese order summary modes with copy support
 - Local recent menu history using `localStorage`
 - Friendly parse errors, retry actions, timeout handling, and empty-menu validation
 - Static deployment support for Vercel and Netlify
@@ -43,39 +46,39 @@ The app is deployment-ready as a static-first MVP. By default, uploaded menu ima
 1. Open the app.
 2. Upload one or more menu images.
 3. Click `Scan Menu`.
-4. In the current static MVP, the parser returns a realistic mock menu.
+4. In real mode, the serverless API parses the uploaded image with MiMo and returns a sanitized `Menu`.
 5. Browse categories and bilingual dish cards.
-6. Add dishes to the cart.
-7. Adjust quantities and add notes.
-8. Generate a bilingual order summary.
-9. Reopen previously parsed menus from `Recent Menus`.
+6. Compare the parsed menu with the original image and correct missing or inaccurate items locally.
+7. Add dishes to the cart.
+8. Adjust quantities and add notes.
+9. Generate and copy an order summary.
+10. Reopen previously parsed menus from `Recent Menus`.
 
 ## Demo Flow
 
 1. Open the app and start on the upload-first screen.
 2. Choose a JPG, PNG, or WebP menu image.
 3. Click `Scan Menu`.
-4. In static mock mode, the uploaded image returns the prepared sample parsed menu.
+4. In real mode, the uploaded image is parsed by the configured MiMo serverless route. Use `/?parse=mock` for a cost-free demo.
 5. Browse bilingual categories, dish names, descriptions, tags, spice levels, and prices.
 6. Add items to the cart, adjust quantities, and add item notes.
 7. Generate the bilingual order summary.
 8. Reload or revisit the page and load a saved menu from `Recent Menus`.
 
-To test the real MiMo parser path, open the app with:
+To force mock/demo parsing, open the app with:
 
 ```text
-?parse=real
+?parse=mock
 ```
 
-Without MiMo environment variables, real mode shows a friendly configuration failure. With MiMo configured on Vercel, real mode posts uploaded images to `POST /api/menus/parse` and validates the model response into the existing menu contract.
+Without MiMo environment variables, the default real mode shows a friendly configuration failure and offers Mock Demo Mode. With MiMo configured on Vercel, real mode posts uploaded images to `POST /api/menus/parse` and validates the model response into the existing menu contract.
 
 ## AI/OCR Status
 
-Real AI/OCR parsing is available only through the serverless API route and is not used by default.
+Real AI parsing is available only through the serverless API route and is the default for `/` and `/?parse=real`.
 
 - The frontend uses a single parser seam: `parseMenuImages(files): Promise<Menu>`.
-- Static deployment defaults to mock parsing.
-- Real mode is activated with `?parse=real` or `?ai=1`.
+- Mock mode is activated with `?parse=mock` or the `Use Sample Menu` button.
 - `POST /api/menus/parse` accepts uploaded image files and calls Xiaomi MiMo from server-side code only.
 - Real mode defaults to accuracy-first MiMo direct vision: `MENU_AI_PROVIDER=mimo`, `MENU_PARSE_STRATEGY=vision`, and `MENU_PARSE_DETAIL=accurate`.
 - `MENU_PARSE_DETAIL=fast | balanced | accurate` controls the speed/completeness tradeoff. Accurate is slower but preserves more visible menu items.
@@ -83,7 +86,7 @@ Real AI/OCR parsing is available only through the serverless API route and is no
 - DeepSeek is not used for vision parsing because the current DeepSeek API/model rejected `image_url` input in diagnostics.
 - Server-side MiMo parser modules, enriched single-pass prompts, and sanitization utilities exist under `src/server/*`, `api/*`, and `src/lib/*`.
 - API keys are never exposed in frontend code.
-- Opening the app with `?parse=real` before `MIMO_API_KEY` is configured shows a friendly error instead of silently returning mock data.
+- Opening `/` or `?parse=real` before `MIMO_API_KEY` is configured shows a friendly error instead of silently returning mock data.
 - Real parsing may send uploaded images to MiMo; use appropriate test images and be mindful of provider cost and image privacy.
 
 ## Architecture
@@ -93,7 +96,7 @@ Key modules:
 - `src/types/menu.ts`: Core TypeScript data contract for menus, categories, items, carts, and order summaries.
 - `src/mock/menuMock.ts`: Realistic bilingual mock menu used by static/mock parsing.
 - `src/lib/menuUtils.ts`: Cart item creation, cart totals, item lookup, and order summary generation.
-- `src/lib/parseMenuImages.ts`: Frontend-facing parser seam. Defaults to mock parsing and can call `/api/menus/parse` in real mode.
+- `src/lib/parseMenuImages.ts`: Frontend-facing parser seam. Defaults to the backend parser and falls back to explicit mock mode with `?parse=mock`.
 - `src/lib/menuSinglePassPrompt.ts`: Single-pass MiMo vision prompt for bilingual extraction, tags, allergens, spicy level, confidence, and prices.
 - `src/lib/menuValidation.ts`: Sanitizes unknown AI-shaped JSON into the existing `Menu` type and rejects empty parsed menus.
 - `src/lib/menuHistory.ts`: Strongly typed localStorage helpers for saved menu history.
@@ -151,6 +154,7 @@ Deployment config is included for:
 - Netlify: `netlify.toml`
 
 See `docs/deployment.md` for exact deployment notes.
+See `docs/benchmarking.md` for parser quality regression checks and `docs/technical-decisions.md` for the main architecture decisions.
 
 Deployment checklist summary:
 
@@ -159,7 +163,7 @@ Deployment checklist summary:
 - Build: `npm run build`
 - Preview production output: `npm run start`
 - Deploy `dist/` through Vercel or Netlify using the included config files.
-- Smoke test upload, mock parsing, menu display, cart, order summary, history, and `?parse=real` error handling after deployment.
+- Smoke test upload, real parsing, `?parse=mock`, menu display, local editing, cart, order summary, history, and friendly error handling after deployment.
 
 For real MiMo parsing on Vercel, configure server-side environment variables:
 
@@ -186,6 +190,8 @@ npm run test:mimo:menu:fast -- "sample menu/menu.jpg"
 npm run benchmark:mimo:menus
 ```
 
+`benchmark:mimo:menus` reports item, price, Chinese-name, retry, and truncation metrics for local sample menus so prompt changes can be compared before shipping.
+
 ## Screenshots
 
 Screenshot placeholder:
@@ -196,13 +202,14 @@ The current generated screenshot file is ignored by Git and is not referenced di
 
 ## Current Limitations
 
-- Mock parsing remains the default, even when MiMo env vars are configured.
 - Real MiMo parsing only works where the Vercel API route is deployed and `MIMO_API_KEY` is set.
+- Static-only hosting without the Vercel API route should use `?parse=mock` for the demo flow.
 - Pay-as-you-go and Token Plan credentials/base URLs are different; this project is configured for pay-as-you-go.
 - Menu history is local to the browser and stored in `localStorage`.
 - There is no authentication, database, payment, or order submission.
 - Uploaded images are not persisted by this app, but real mode sends them to the configured MiMo provider for parsing.
 - AI parsing may be incomplete or wrong; the app sanitizes output but does not guarantee menu accuracy.
+- Local item editing is browser-only and intended as a correction UX prototype, not a persisted moderation workflow.
 - OCR-first may miss tiny, blurred, cropped, or low-contrast text.
 - Real-mode vision parsing defaults to item coverage first. Dense menus may leave descriptions, tags, or allergens empty so more visible item names and prices are preserved.
 - Chinese translations, tags, allergens, spicy levels, and confidence values are AI-generated and may need user correction in a production system.
@@ -213,6 +220,7 @@ The current generated screenshot file is ignored by Git and is not referenced di
 ## Future Roadmap
 
 - Add stronger server-side schema validation and observability.
+- Persist corrected menus and edits behind a real backend.
 - Add provider-level retries, rate-limit handling, and model response tracing.
 - Support persistent menu history with a database.
 - Add user accounts only if saved history needs to travel across devices.
@@ -223,9 +231,9 @@ The current generated screenshot file is ignored by Git and is not referenced di
 
 These are suggested resume bullets, not claims that production AI is already live:
 
-- Built a TypeScript static web MVP that turns uploaded menu images into a structured bilingual menu browsing flow using a mock parsing layer, typed menu contracts, cart state, order summaries, and localStorage history.
-- Designed an AI-ready menu parsing architecture with a secure server-side parser seam, strict JSON sanitization, retryable parse states, and deployment-safe mock mode.
-- Implemented a responsive menu ordering experience with upload validation, friendly parse errors, saved menu history, quantity controls, item notes, and bilingual waiter-ready summaries.
+- Built a TypeScript web MVP that turns uploaded menu images into a structured bilingual ordering flow with a MiMo-backed serverless parser, typed menu contracts, local correction UX, cart state, order summaries, and localStorage history.
+- Designed an AI-ready parsing architecture with secure server-side provider calls, strict JSON sanitization, accuracy/detail modes, benchmark diagnostics, retryable parse states, and a deployment-safe mock mode.
+- Implemented a responsive menu ordering experience with upload guidance, parsing quality metadata, original-image comparison, editable dish cards, quantity controls, item notes, and copyable waiter-ready summaries.
 
 ## Security Notes
 

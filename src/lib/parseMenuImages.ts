@@ -7,7 +7,21 @@ const mockLatencyMs = 900;
 const slowMockLatencyMs = 60_000;
 const parseEndpoint = "/api/menus/parse";
 
+export type ClientParseMetadata = {
+  item_count: number;
+  category_count: number;
+  parse_detail: string;
+  provider: string;
+  recovered_from_truncation: boolean;
+  retry_used: boolean;
+  duration_ms: number | null;
+};
+
+let lastClientParseMetadata: ClientParseMetadata | null = null;
+
 export async function parseMenuImages(files: File[]): Promise<Menu> {
+  lastClientParseMetadata = null;
+
   if (files.length === 0) {
     throw new ParseMenuError("no_files", "Please choose at least one menu image before scanning.");
   }
@@ -42,7 +56,7 @@ export async function parseMenuImages(files: File[]): Promise<Menu> {
 
   await delay(mockLatencyMs);
 
-  return ensureMenuCanRender({
+  const menu = ensureMenuCanRender({
     ...mockMenu,
     metadata: {
       ...mockMenu.metadata,
@@ -52,6 +66,11 @@ export async function parseMenuImages(files: File[]): Promise<Menu> {
       status: "completed",
     },
   });
+  lastClientParseMetadata = createClientMetadata(menu, {
+    parseDetail: "mock",
+    provider: "mock",
+  });
+  return menu;
 }
 
 async function parseWithBackend(files: File[]): Promise<Menu> {
@@ -66,8 +85,8 @@ async function parseWithBackend(files: File[]): Promise<Menu> {
     body: formData,
   }).catch((error: unknown) => {
     throw new ParseMenuError(
-      "missing_backend",
-      "Real menu parsing is not available yet because the backend route is not configured.",
+      "network_error",
+      "NETWORK_ERROR: Could not reach the real AI parser. Check your connection or use Mock Demo Mode.",
       { cause: error },
     );
   });
@@ -109,16 +128,18 @@ async function parseWithBackend(files: File[]): Promise<Menu> {
     );
   }
 
-  return ensureMenuCanRender(
+  const menu = ensureMenuCanRender(
     sanitizeMenu(parsedBody.menu ?? body, {
       imageUrls: files.map((file) => file.name),
     }),
   );
+  lastClientParseMetadata = readParseMetadata(parsedBody, menu);
+  return menu;
 }
 
 function shouldUseBackendParser(): boolean {
   const params = new URLSearchParams(window.location.search);
-  return params.get("parse") === "real" || params.get("ai") === "1";
+  return params.get("parse") !== "mock";
 }
 
 function createParseEndpoint(): string {
@@ -218,7 +239,7 @@ function getBackendErrorCode(code: string | undefined, status: number): ParseMen
   }
 
   if (code === "AI_INVALID_JSON" || code === "ai_invalid_json") {
-    return "provider_failure";
+    return "invalid_json";
   }
 
   if (code === "EMPTY_MENU_EXTRACTION" || code === "empty_menu_extraction") {
@@ -240,7 +261,24 @@ function getBackendErrorCode(code: string | undefined, status: number): ParseMen
 }
 
 function formatBackendErrorMessage(code: string | undefined, message: string): string {
-  return code ? `${code}: ${message}` : message;
+  switch (code) {
+    case "SERVER_CONFIG":
+      return "SERVER_CONFIG: Real AI mode is not configured in this environment. You can use Mock Demo Mode instead.";
+    case "MIMO_TIMEOUT":
+      return "MIMO_TIMEOUT: This menu took too long to parse. Try cropping the image, uploading one page at a time, or retrying.";
+    case "EMPTY_MENU_EXTRACTION":
+      return "EMPTY_MENU_EXTRACTION: We could not find readable menu items. Try a clearer photo with less glare.";
+    case "AI_INVALID_JSON":
+      return "AI_INVALID_JSON: The AI response was incomplete. Please retry.";
+    case "MIMO_API_ERROR":
+      return `MIMO_API_ERROR: The AI provider returned an error. ${message}`;
+    case "UNSUPPORTED_FILE_TYPE":
+      return `UNSUPPORTED_FILE_TYPE: Only JPG, PNG, and WebP images are supported.`;
+    case "FILE_TOO_LARGE":
+      return `FILE_TOO_LARGE: Each image must be 10MB or smaller.`;
+    default:
+      return code ? `${code}: ${message}` : message;
+  }
 }
 
 function formatDebugResponseMessage(debug: Record<string, unknown>): string {
@@ -259,4 +297,41 @@ function ensureMenuCanRender(menu: Menu): Menu {
   }
 
   return menu;
+}
+
+export function getLastClientParseMetadata(): ClientParseMetadata | null {
+  return lastClientParseMetadata;
+}
+
+function readParseMetadata(body: Record<string, unknown>, menu: Menu): ClientParseMetadata {
+  const metadata = asRecord(body.parse_metadata);
+
+  return createClientMetadata(menu, {
+    parseDetail: asString(metadata.parse_detail) ?? "accurate",
+    provider: asString(metadata.provider) ?? "mimo",
+    recoveredFromTruncation: metadata.recovered_from_truncation === true,
+    retryUsed: metadata.retry_used === true,
+    durationMs: asNumber(metadata.duration_ms) ?? null,
+  });
+}
+
+function createClientMetadata(
+  menu: Menu,
+  options: {
+    parseDetail: string;
+    provider: string;
+    recoveredFromTruncation?: boolean;
+    retryUsed?: boolean;
+    durationMs?: number | null;
+  },
+): ClientParseMetadata {
+  return {
+    item_count: menu.categories.reduce((sum, category) => sum + category.items.length, 0),
+    category_count: menu.categories.length,
+    parse_detail: options.parseDetail,
+    provider: options.provider,
+    recovered_from_truncation: options.recoveredFromTruncation ?? false,
+    retry_used: options.retryUsed ?? false,
+    duration_ms: options.durationMs ?? null,
+  };
 }

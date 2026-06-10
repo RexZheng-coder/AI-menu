@@ -4,6 +4,7 @@ export type ParseMenuErrorCode =
   | "file_too_large"
   | "mock_failure"
   | "missing_backend"
+  | "network_error"
   | "invalid_json"
   | "parse_timeout"
   | "empty_menu"

@@ -46,6 +46,37 @@ export function renderUploadPanel(props: UploadPanelProps): HTMLElement {
 
   copy.append(eyebrow, title, description, modeLabel);
 
+  const guidance = document.createElement("div");
+  guidance.className = "upload-guidance";
+
+  const guidanceTitle = document.createElement("p");
+  guidanceTitle.className = "upload-guidance__title";
+  guidanceTitle.textContent = "For best results";
+
+  const tips = document.createElement("ul");
+  tips.className = "upload-guidance__list";
+
+  for (const tip of [
+    "Take a clear photo",
+    "Avoid glare and shadows",
+    "Keep the menu flat",
+    "Crop unrelated background",
+    "Upload one menu page at a time",
+  ]) {
+    const item = document.createElement("li");
+    item.textContent = tip;
+    tips.append(item);
+  }
+
+  const privacyNote = document.createElement("p");
+  privacyNote.className = "upload-guidance__note";
+  privacyNote.textContent = props.isRealMode
+    ? "Real AI mode sends uploaded images to the configured AI API."
+    : "Mock demo mode uses a sample menu and does not call the AI API.";
+
+  guidance.append(guidanceTitle, tips, privacyNote);
+  copy.append(guidance);
+
   const controls = document.createElement("div");
   controls.className = "upload-panel__controls";
 
@@ -140,7 +171,14 @@ function renderErrorPanel(props: UploadPanelProps): HTMLElement {
   clearButton.textContent = "Clear";
   clearButton.addEventListener("click", props.onClearFiles);
 
-  actions.append(retryButton, clearButton);
+  const sampleButton = document.createElement("button");
+  sampleButton.className = "sample-menu-button";
+  sampleButton.type = "button";
+  sampleButton.disabled = isBusy(props.parseState);
+  sampleButton.textContent = "Use Mock Demo Mode";
+  sampleButton.addEventListener("click", props.onUseSampleMenu);
+
+  actions.append(retryButton, clearButton, sampleButton);
   panel.append(message, actions);
   return panel;
 }

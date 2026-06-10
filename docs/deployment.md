@@ -1,6 +1,6 @@
 # Deployment
 
-This is a static-first MVP. The deployed app defaults to mock parsing mode and does not require API keys unless real MiMo parsing is enabled with `?parse=real`.
+This is a static-first MVP with an optional Vercel serverless parser. The deployed root route defaults to real MiMo parsing when the API route and server-side env vars are configured. Use `?parse=mock` for a cost-free sample menu demo.
 
 ## Deployment Checklist
 
@@ -22,8 +22,8 @@ Use the included `vercel.json`.
 - Build command: `npm run build`
 - Output directory: `dist`
 - Framework preset: Other/static
-- Environment variables: none required for mock mode
-- Environment variables for real MiMo mode: `MIMO_API_KEY`, `MIMO_BASE_URL`, `MIMO_MODEL`
+- Environment variables for real MiMo mode: `MIMO_API_KEY`, `MIMO_BASE_URL`, `MIMO_MODEL`, `MENU_AI_PROVIDER`, `MENU_PARSE_STRATEGY`, `MENU_PARSE_DETAIL`, `MAX_PARSE_IMAGES`
+- Environment variables: none required only when demonstrating with `?parse=mock`
 
 Recommended flow:
 
@@ -56,7 +56,7 @@ Use the included `netlify.toml`.
 
 - Build command: `npm run build`
 - Publish directory: `dist`
-- Environment variables: none required for the current mock/static MVP
+- Environment variables: none required for `?parse=mock`; real parsing requires an equivalent serverless route and server-side MiMo variables
 
 Recommended flow:
 
@@ -71,18 +71,19 @@ Recommended flow:
 Run this against the deployed URL:
 
 - App loads without console errors.
-- Upload screen shows `Mock Demo Mode`.
+- Upload screen shows `Real AI Mode` at `/` and `Mock Demo Mode` at `/?parse=mock`.
 - Selecting a JPG, PNG, or WebP image creates a preview.
-- `Scan Menu` returns the sample parsed menu in static mode.
+- `Scan Menu` returns a MiMo-parsed menu in real mode, or the sample parsed menu at `?parse=mock`.
 - Restaurant header, bilingual categories, dish cards, tags, spice levels, confidence, and prices render.
 - `+` buttons add dishes to the cart.
 - Quantity controls update totals.
 - Item notes are retained in the cart.
 - Order summary generates bilingual display text.
 - Recent menu history appears after parsing and can reload a saved menu.
-- Opening `?parse=real` without `MIMO_API_KEY` shows a friendly configuration failure.
-- Opening `?parse=real` with MiMo env vars configured can parse a real menu image through `/api/menus/parse`.
-- Opening `?parse=real&debug=1` posts the image to `/api/menus/parse?debug=1` and returns upload metadata without calling MiMo.
+- Opening `/` or `?parse=real` without `MIMO_API_KEY` shows a friendly configuration failure and offers Mock Demo Mode.
+- Opening `/` or `?parse=real` with MiMo env vars configured can parse a real menu image through `/api/menus/parse`.
+- Opening `?parse=mock` returns the sample menu without calling MiMo.
+- Opening `?debug=1` posts the image to `/api/menus/parse?debug=1` and returns upload metadata without calling MiMo.
 - Desktop and mobile widths do not show broken layout or horizontal overflow.
 
 Real parsing sends uploaded images to MiMo and may incur provider cost. Use non-sensitive test images unless your deployment and provider account are approved for the image content you upload.
@@ -90,18 +91,18 @@ Real parsing sends uploaded images to MiMo and may incur provider cost. Use non-
 ## What Works In The Static MVP
 
 - Upload-first menu flow
-- Mock menu parsing
+- Explicit mock menu parsing with `?parse=mock` or `Use Sample Menu`
 - Parsed bilingual menu rendering
 - Cart quantities, notes, totals, and order summary
 - Local menu history with `localStorage`
 - Friendly errors and retry states
-- Optional Vercel serverless MiMo parser via `?parse=real`
+- Default Vercel serverless MiMo parser at `/` and `?parse=real`
 
 ## Real MiMo Parser
 
 The Vercel route `POST /api/menus/parse` accepts multipart image uploads from the `images` field. During debugging it also accepts `files` as a temporary compatibility field. It rejects non-image files, enforces the same 10MB per-file limit as the frontend, converts images to data URLs, calls MiMo server-side, and sanitizes the model output into the app's `Menu` type.
 
-API keys must stay server-side only in `MIMO_API_KEY`. Mock mode remains the default even when MiMo is configured. Real image parsing requires a MiMo model that supports image understanding; the default is `mimo-v2.5`.
+API keys must stay server-side only in `MIMO_API_KEY`. Real image parsing requires a MiMo model that supports image understanding; the default is `mimo-v2.5`. Mock mode is still available explicitly with `?parse=mock`.
 
 Real parsing defaults to `MENU_AI_PROVIDER=mimo`, `MENU_PARSE_STRATEGY=vision`, and `MENU_PARSE_DETAIL=accurate`. This single-pass MiMo vision parser reads uploaded images and prioritizes complete visible item coverage, bilingual item names, categories, and prices. Optional descriptions, tags, allergens, spicy level, and confidence are sanitized into the existing `Menu` contract; dense menus may leave optional fields empty so more visible items are preserved. OCR-first remains available only when explicitly selected with `MENU_PARSE_STRATEGY=ocr_first`.
 
@@ -144,7 +145,7 @@ The app now uses a Node.js function plus an app-level MiMo timeout so slow provi
 
 - Upload one smaller, clearer image and retry.
 - Check Vercel function logs for `route_start`, `method_checked`, `content_type_checked`, `formdata_start`, `formdata_done`, `images_extracted`, `images_limited`, `image_conversion_start`, `image_conversion_done`, `parse_strategy`, `mimo_input_summary`, `mimo_request_start`, `mimo_response_status`, `mimo_response_summary`, `sanitize_start`, `sanitize_done`, `route_success`, or `route_error`.
-- For upload parsing specifically, open the app with `?parse=real&debug=1` and confirm `/api/menus/parse?debug=1` returns `imageCount`, `totalBytes`, and `fileTypes`.
+- For upload parsing specifically, open the app with `?debug=1` and confirm `/api/menus/parse?debug=1` returns `imageCount`, `totalBytes`, and `fileTypes`.
 - Check MiMo service latency and model availability.
 - Confirm the selected `MIMO_MODEL` supports image understanding.
 - Confirm you are using a pay-as-you-go `sk-xxxxx` key with `https://api.xiaomimimo.com/v1`, not Token Plan credentials/base URLs.

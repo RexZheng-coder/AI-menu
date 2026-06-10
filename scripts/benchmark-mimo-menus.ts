@@ -29,8 +29,11 @@ type BenchmarkRow = {
   restaurant: string;
   categories: number | string;
   items: number | string;
+  prices: number | string;
+  chinese_names: number | string;
   finish_reason: string;
   recovered_from_truncation: string;
+  retry_used: string;
   error_code: string;
 };
 
@@ -53,6 +56,7 @@ for (const file of sampleFiles) {
     const menu = await parseMenuWithMiMo([image]);
     const menuDiagnostics = getLastMiMoMenuParseDiagnostics();
     const chatDiagnostics = getLastMiMoChatDiagnostics();
+    const items = menu.categories.flatMap((category) => category.items);
 
     rows.push({
       file,
@@ -60,9 +64,12 @@ for (const file of sampleFiles) {
       duration_ms: Date.now() - startedAt,
       restaurant: menu.restaurant.name,
       categories: menu.categories.length,
-      items: menu.categories.reduce((sum, category) => sum + category.items.length, 0),
+      items: items.length,
+      prices: items.filter((item) => item.price.raw || item.price.amount !== null).length,
+      chinese_names: items.filter((item) => item.name_zh && item.name_zh !== item.name_en).length,
       finish_reason: menuDiagnostics?.finishReason ?? chatDiagnostics?.finishReason ?? "unknown",
       recovered_from_truncation: String(menuDiagnostics?.recoveredFromTruncation ?? false),
+      retry_used: String((menuDiagnostics?.retryCount ?? 0) > 0),
       error_code: "",
     });
   } catch (error) {
@@ -75,8 +82,11 @@ for (const file of sampleFiles) {
       restaurant: "",
       categories: "",
       items: "",
+      prices: "",
+      chinese_names: "",
       finish_reason: chatDiagnostics?.finishReason ?? "unknown",
       recovered_from_truncation: String(getLastMiMoMenuParseDiagnostics()?.recoveredFromTruncation ?? false),
+      retry_used: String((getLastMiMoMenuParseDiagnostics()?.retryCount ?? 0) > 0),
       error_code: readErrorCode(error),
     });
   }

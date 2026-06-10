@@ -1,13 +1,19 @@
 import type { Cart, CartItem, OrderSummary } from "../types/menu.js";
 
+export type SummaryLanguageMode = "bilingual" | "english" | "chinese";
+
 type CartPanelProps = {
   cart: Cart;
   orderSummary: OrderSummary | null;
+  summaryLanguage: SummaryLanguageMode;
+  copyStatus: string | null;
   onIncrease: (itemId: string) => void;
   onDecrease: (itemId: string) => void;
   onRemove: (itemId: string) => void;
   onNoteChange: (itemId: string, notes: string) => void;
   onGenerateSummary: () => void;
+  onSummaryLanguageChange: (mode: SummaryLanguageMode) => void;
+  onCopySummary: (text: string) => void;
 };
 
 export function renderCartPanel(props: CartPanelProps): HTMLElement {
@@ -42,7 +48,7 @@ export function renderCartPanel(props: CartPanelProps): HTMLElement {
     list.append(renderCartItem(item, props));
   }
 
-  panel.append(list, renderCartTotal(props.cart), renderSummaryActions(props), renderSummary(props.orderSummary));
+  panel.append(list, renderCartTotal(props.cart), renderSummaryActions(props), renderSummary(props));
   return panel;
 }
 
@@ -95,6 +101,7 @@ function renderCartItem(item: CartItem, props: CartPanelProps): HTMLElement {
   noteInput.type = "text";
   noteInput.placeholder = "less spicy, no onion, 少辣";
   noteInput.value = item.notes ?? "";
+  noteInput.addEventListener("input", () => props.onNoteChange(item.item_id, noteInput.value));
   noteInput.addEventListener("change", () => props.onNoteChange(item.item_id, noteInput.value));
 
   noteLabel.append(noteInput);
@@ -156,7 +163,8 @@ function renderSummaryActions(props: CartPanelProps): HTMLElement {
   return actions;
 }
 
-function renderSummary(summary: OrderSummary | null): HTMLElement {
+function renderSummary(props: CartPanelProps): HTMLElement {
+  const summary = props.orderSummary;
   const section = document.createElement("section");
   section.className = "order-summary";
   section.setAttribute("aria-label", "Order summary");
@@ -172,6 +180,32 @@ function renderSummary(summary: OrderSummary | null): HTMLElement {
   const title = document.createElement("h3");
   title.className = "order-summary__title";
   title.textContent = "Order Summary";
+
+  const toolbar = document.createElement("div");
+  toolbar.className = "order-summary__toolbar";
+
+  const languageGroup = document.createElement("div");
+  languageGroup.className = "summary-language";
+  languageGroup.setAttribute("aria-label", "Order summary language");
+
+  for (const mode of ["bilingual", "english", "chinese"] as const) {
+    const button = document.createElement("button");
+    button.className = `summary-language__button${props.summaryLanguage === mode ? " summary-language__button--active" : ""}`;
+    button.type = "button";
+    button.textContent = mode === "bilingual" ? "Bilingual" : mode === "english" ? "English" : "中文";
+    button.setAttribute("aria-pressed", String(props.summaryLanguage === mode));
+    button.addEventListener("click", () => props.onSummaryLanguageChange(mode));
+    languageGroup.append(button);
+  }
+
+  const displayedSummary = formatSummaryDisplay(summary, props.summaryLanguage);
+  const copyButton = document.createElement("button");
+  copyButton.className = "copy-summary-button";
+  copyButton.type = "button";
+  copyButton.textContent = props.copyStatus ?? "Copy";
+  copyButton.addEventListener("click", () => props.onCopySummary(displayedSummary));
+
+  toolbar.append(languageGroup, copyButton);
 
   const list = document.createElement("ul");
   list.className = "order-summary__items";
@@ -189,9 +223,9 @@ function renderSummary(summary: OrderSummary | null): HTMLElement {
 
   const displayText = document.createElement("pre");
   displayText.className = "order-summary__display";
-  displayText.textContent = summary.display_text;
+  displayText.textContent = displayedSummary;
 
-  section.append(title, list, total, displayText);
+  section.append(title, toolbar, list, total, displayText);
   return section;
 }
 
@@ -215,4 +249,30 @@ function formatNullableCurrency(amount: number | null, currency: string): string
     style: "currency",
     currency,
   }).format(amount);
+}
+
+function formatSummaryDisplay(summary: OrderSummary, mode: SummaryLanguageMode): string {
+  const zhItemText = summary.items
+    .map((item) => {
+      const noteText = item.notes ? `，备注：${item.notes}` : "";
+      return `${item.quantity}份${item.name_zh}${noteText}`;
+    })
+    .join("；");
+  const enItemText = summary.items
+    .map((item) => {
+      const noteText = item.notes ? `, note: ${item.notes}` : "";
+      return `${item.quantity} x ${item.name_en}${noteText}`;
+    })
+    .join("; ");
+  const total = formatNullableCurrency(summary.estimated_total, summary.currency);
+
+  if (mode === "chinese") {
+    return `中文：我要${zhItemText}。预估总计：${total}。`;
+  }
+
+  if (mode === "english") {
+    return `English: ${enItemText}. Estimated total: ${total}.`;
+  }
+
+  return `中文：我要${zhItemText}。预估总计：${total}。\nEnglish: ${enItemText}. Estimated total: ${total}.`;
 }
