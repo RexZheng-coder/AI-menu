@@ -10,7 +10,7 @@ The current app defaults to the real MiMo-backed parsing path when the serverles
 
 ## Live Demo
 
-TBD
+Preview deployment: [AI Menu Assistant](https://ai-menu-o57lg26c2-rex-z-projects.vercel.app)
 
 The app is deployment-ready as a static-first MVP with a Vercel serverless parser. The root route `/` and `/?parse=real` use real MiMo parsing; `/?parse=mock` forces the sample menu flow without API cost.
 
