@@ -48,7 +48,7 @@ export function renderMenuCategory(
   grid.className = "menu-grid";
 
   for (const item of category.items) {
-    grid.append(renderMenuItemCard(item, actions));
+    grid.append(renderMenuItemCard(item, actions, category));
   }
 
   section.append(grid);

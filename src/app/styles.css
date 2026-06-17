@@ -699,12 +699,15 @@ button:disabled {
 
 .item-card__header {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  column-gap: 16px;
+  row-gap: 8px;
 }
 
 .item-card__names {
+  flex: 1 1 13rem;
   min-width: 0;
 }
 
@@ -725,12 +728,17 @@ button:disabled {
 }
 
 .item-card__price {
-  flex: 0 0 auto;
+  flex: 0 1 14rem;
+  max-width: 100%;
+  min-width: 7rem;
   margin: 0;
+  margin-left: auto;
   color: #1d1a16;
   font-size: 1rem;
   font-weight: 800;
+  line-height: 1.35;
   overflow-wrap: anywhere;
+  word-break: break-word;
   text-align: right;
 }
 
@@ -1430,7 +1438,11 @@ button:disabled {
   }
 
   .item-card__price {
+    max-width: 100%;
+    min-width: 0;
+    margin-left: 0;
     margin-top: 8px;
+    text-align: left;
   }
 
   .add-button {

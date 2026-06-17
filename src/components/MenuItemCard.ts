@@ -1,5 +1,5 @@
 import { renderTagPill } from "./TagPill.js";
-import type { MenuItem } from "../types/menu.js";
+import type { MenuCategory, MenuItem } from "../types/menu.js";
 
 export function renderMenuItemCard(
   item: MenuItem,
@@ -8,6 +8,7 @@ export function renderMenuItemCard(
     onEditItem: (item: MenuItem) => void;
     onDeleteItem: (itemId: string) => void;
   },
+  category: Pick<MenuCategory, "name_en" | "name_zh">,
 ): HTMLElement {
   const article = document.createElement("article");
   article.className = "item-card";
@@ -31,41 +32,41 @@ export function renderMenuItemCard(
 
   names.append(nameZh, nameEn);
 
+  const priceText = formatPrice(item);
   const price = document.createElement("p");
   price.className = "item-card__price";
-  price.textContent = formatPrice(item);
+  price.textContent = priceText;
+  price.title = priceText;
 
   header.append(names, price);
 
-  const description = document.createElement("p");
-  description.className = "item-card__description";
-  description.textContent = item.description_zh ?? item.description_en ?? "暂无描述";
+  content.append(header);
 
-  const tags = document.createElement("div");
-  tags.className = "tag-list";
+  const descriptionText = getDescriptionText(item);
 
-  for (const tag of item.tags_zh) {
-    tags.append(renderTagPill(tag));
+  if (descriptionText) {
+    const description = document.createElement("p");
+    description.className = "item-card__description";
+    description.textContent = descriptionText;
+    content.append(description);
   }
 
-  const details = document.createElement("div");
-  details.className = "item-card__details";
+  if (item.tags_zh.length > 0) {
+    const tags = document.createElement("div");
+    tags.className = "tag-list";
 
-  const spice = document.createElement("span");
-  spice.className = `spice-meter spice-meter--level-${item.spicy_level}`;
-  spice.textContent = `辣度 ${item.spicy_level}/3`;
+    for (const tag of item.tags_zh) {
+      tags.append(renderTagPill(tag));
+    }
 
-  details.append(spice);
-
-  if (typeof item.confidence === "number") {
-    const confidence = document.createElement("span");
-    confidence.className = "confidence";
-    confidence.textContent = `${Math.round(item.confidence * 100)}%`;
-    confidence.setAttribute("aria-label", `Extraction confidence ${Math.round(item.confidence * 100)} percent`);
-    details.append(confidence);
+    content.append(tags);
   }
 
-  content.append(header, description, tags, details);
+  const details = renderItemDetails(item, category);
+
+  if (details) {
+    content.append(details);
+  }
 
   const addButton = document.createElement("button");
   addButton.className = "add-button";
@@ -94,6 +95,107 @@ export function renderMenuItemCard(
   actionColumn.append(addButton, editButton, deleteButton);
   article.append(content, actionColumn);
   return article;
+}
+
+function getDescriptionText(item: MenuItem): string | null {
+  const description = item.description_zh ?? item.description_en;
+
+  if (!description) {
+    return null;
+  }
+
+  const trimmedDescription = description.trim();
+
+  if (!trimmedDescription || isPlaceholderDescription(trimmedDescription)) {
+    return null;
+  }
+
+  return trimmedDescription;
+}
+
+function isPlaceholderDescription(description: string): boolean {
+  const normalizedDescription = normalizeText(description);
+
+  return (
+    normalizedDescription === "暂无描述" ||
+    normalizedDescription === "无描述" ||
+    normalizedDescription === "无" ||
+    normalizedDescription === "n/a" ||
+    normalizedDescription === "na" ||
+    normalizedDescription === "none" ||
+    normalizedDescription === "null"
+  );
+}
+
+function renderItemDetails(item: MenuItem, category: Pick<MenuCategory, "name_en" | "name_zh">): HTMLElement | null {
+  if (isBeverageItem(item, category)) {
+    return null;
+  }
+
+  const details = document.createElement("div");
+  details.className = "item-card__details";
+
+  const spice = document.createElement("span");
+  spice.className = `spice-meter spice-meter--level-${item.spicy_level}`;
+  spice.textContent = `辣度 ${item.spicy_level}/3`;
+  details.append(spice);
+
+  if (typeof item.confidence === "number") {
+    const confidence = document.createElement("span");
+    confidence.className = "confidence";
+    confidence.textContent = `${Math.round(item.confidence * 100)}%`;
+    confidence.setAttribute("aria-label", `Extraction confidence ${Math.round(item.confidence * 100)} percent`);
+    details.append(confidence);
+  }
+
+  return details;
+}
+
+function isBeverageItem(item: MenuItem, category: Pick<MenuCategory, "name_en" | "name_zh">): boolean {
+  const searchableText = [
+    category.name_en,
+    category.name_zh,
+    item.name_en,
+    item.name_zh,
+    ...item.tags,
+    ...item.tags_zh,
+  ]
+    .map(normalizeText)
+    .join(" ");
+
+  return beverageKeywords.some((keyword) => searchableText.includes(keyword));
+}
+
+const beverageKeywords = [
+  "饮",
+  "饮品",
+  "咖啡",
+  "茶",
+  "酒",
+  "cafe",
+  "cafes",
+  "café",
+  "cafés",
+  "coffee",
+  "drink",
+  "drinks",
+  "beverage",
+  "beverages",
+  "tea",
+  "juice",
+  "smoothie",
+  "soda",
+  "beer",
+  "wine",
+  "cocktail",
+  "latte",
+  "mocha",
+  "espresso",
+  "cappuccino",
+];
+
+function normalizeText(value: string): string {
+  return value.trim().toLowerCase();
 }
 
 function formatPrice(item: MenuItem): string {
