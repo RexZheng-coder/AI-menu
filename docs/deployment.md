@@ -112,7 +112,7 @@ DeepSeek is not used for vision parsing because the current DeepSeek API/model r
 
 The route processes only the first `MAX_PARSE_IMAGES` uploads, defaulting to 2, to keep latency and provider cost predictable. Server-side preprocessing logs original bytes, optimized bytes, and a SHA-256 hash prefix. If optional `sharp` is not available, preprocessing is a safe no-op fallback.
 
-The parser is implemented as a Vercel Node.js Serverless Function, not an Edge Function. `vercel.json` sets `/api/menus/parse` to a 60-second maximum duration, and the route has an app-level timeout just below that limit so the API can return structured JSON before Vercel stops the function:
+The parser is implemented as a Vercel Node.js Serverless Function, not an Edge Function. `vercel.json` sets `/api/menus/parse` to a 60-second maximum duration. MiMo request timeouts scale with the number of processed images at roughly 30 seconds per image, capped just below the Vercel limit so the API can return structured JSON before Vercel stops the function:
 
 ```json
 {
