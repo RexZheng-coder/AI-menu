@@ -352,7 +352,7 @@ function createDetailConfig(): DetailConfig {
   return {
     detail,
     userPrompt: MENU_SINGLE_PASS_ACCURATE_RUNTIME_PROMPT,
-    maxCompletionTokens: 2600,
+    maxCompletionTokens: 4200,
     timeoutMs: 55_000,
     lowItemRetryThreshold: 15,
   };

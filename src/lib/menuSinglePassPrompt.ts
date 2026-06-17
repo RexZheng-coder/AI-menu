@@ -52,6 +52,7 @@ Accuracy-first rules:
 Translation guidance:
 - Do not leave common food terms as obscure sound-alike Chinese transliterations when a useful Chinese explanation is possible.
 - For example, translate "NDUJA, SPIANATA & GORGONZOLA" as "意式辣肉酱香肠、意式萨拉米、戈贡佐拉蓝纹奶酪", not as opaque phonetic names.
+- Translate "MARINARA" pizza as "番茄蒜香披萨" or similar; do not confuse it with "MARGHERITA".
 - For Italian cured meats, cheeses, sauces, pasta shapes, French sauces, Spanish dishes, or Japanese/Korean/Chinese terms, explain the ingredient or dish type in natural Chinese.
 
 Priority order if the menu is dense:
@@ -94,18 +95,25 @@ Accuracy-first means complete item coverage:
 - Extract every readable visible menu item in reading order.
 - Do not summarize, sample, or intentionally skip visible items.
 - Preserve categories, item names, and price_raw exactly when possible.
+- If an item has an ingredient line or short description below the item name, put that visible text in description_en.
+- Translate visible ingredient lines/descriptions into concise natural Chinese in description_zh.
+- For pizza, calzone, pasta, sandwiches, salads, and starters, ingredient lines are important and should not be dropped in accurate mode.
 - Translate every item name into concise natural Chinese.
 - If item names include Italian, French, Spanish, Japanese, Korean, Chinese, or other culinary terms, translate by meaning for Chinese diners instead of using opaque phonetic transliteration.
 - Example: "NDUJA, SPIANATA & GORGONZOLA" -> "意式辣肉酱香肠、意式萨拉米、戈贡佐拉蓝纹奶酪".
+- Example: "MARINARA" pizza -> "番茄蒜香披萨", not "玛格丽特披萨".
 - Preserve visible or clearly implied currency symbols in price_raw when the menu uses one currency.
 - Guess spicy_level from the item name when obvious, such as nduja, spicy, hot, arrabbiata, jalapeño, chili, pepper, buffalo, mala, curry, or similar terms.
-- Each item only needs name_en, name_zh, price_raw, and spicy_level. Omit other optional fields so more items fit.
-- Backend will default descriptions, tags, and allergens.
+- Each item should include name_en, name_zh, description_en, description_zh, price_raw, and spicy_level.
+- Keep descriptions concise. Use ingredient lists as descriptions; do not invent marketing copy.
+- Tags are optional. Include tags_zh only when cheap and obvious, otherwise omit them so descriptions and item coverage fit.
+- Backend will default tags and allergens.
+- If output space is tight, preserve all item names/prices first, then keep short descriptions for as many items as possible.
 - Use name_en "Menu" and name_zh "菜单" if no category heading is visible.
 - If nothing can be read, return {"restaurant_name":null,"cuisine_type":null,"categories":[]}.
 
-Compact shape:
-{"restaurant_name":string|null,"cuisine_type":string|null,"categories":[{"name_en":string,"name_zh":string,"items":[{"name_en":string,"name_zh":string,"price_raw":string|null,"spicy_level":0|1|2|3}]}]}`;
+Accurate shape:
+{"restaurant_name":string|null,"cuisine_type":string|null,"categories":[{"name_en":string,"name_zh":string,"items":[{"name_en":string,"name_zh":string,"description_en":string|null,"description_zh":string|null,"price_raw":string|null,"tags_zh"?:string[],"spicy_level":0|1|2|3}]}]}`;
 
 export const MENU_SINGLE_PASS_FAST_PROMPT = `Read the menu image and return final minified JSON only. Do not think step by step. Do not explain. Do not use markdown.
 
