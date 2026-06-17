@@ -9,7 +9,7 @@ import {
   type LightweightMenuExtraction,
 } from "./lightweightMenuExtraction.js";
 
-const defaultStructuringTimeoutMs = 13_000;
+const defaultStructuringTimeoutMs = 24_000;
 
 export async function structureMenuTextWithMiMo(
   ocrText: string,

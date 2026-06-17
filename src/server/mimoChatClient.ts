@@ -94,7 +94,7 @@ export class MiMoParserError extends Error {
 
 export const defaultMiMoBaseUrl = "https://api.xiaomimimo.com/v1";
 export const defaultMiMoModel = "mimo-v2.5";
-export const defaultMiMoTimeoutMs = 24_000;
+export const defaultMiMoTimeoutMs = 55_000;
 
 const imageCapableModels = new Set(["mimo-v2.5", "mimo-v2-omni"]);
 let lastMiMoChatDiagnostics: MiMoChatDiagnostics | null = null;

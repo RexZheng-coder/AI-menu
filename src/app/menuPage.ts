@@ -38,7 +38,7 @@ const cartId = "cart_lantern_house_001";
 const maxUploadSizeBytes = 10 * 1024 * 1024;
 const acceptedImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const acceptedImageExtensions = [".jpg", ".jpeg", ".png", ".webp"];
-const defaultParseTimeoutMs = 30_000;
+const defaultParseTimeoutMs = 60_000;
 
 type UploadPreview = {
   file: File;

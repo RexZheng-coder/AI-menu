@@ -8,7 +8,7 @@ import {
 } from "./mimoChatClient.js";
 import type { ServerMenuImage } from "./menuImageInput.js";
 
-const defaultOcrTimeoutMs = 16_000;
+const defaultOcrTimeoutMs = 28_000;
 const ocrPrompt =
   "Extract visible restaurant menu text in compact form. Include the restaurant/menu name if visible. Keep item order top to bottom. Use one line per section or item. For each item include name, exact visible price text, and DESC with at most 6 visible words. Do not copy full sentence descriptions. Return text only. Do not translate or explain.";
 

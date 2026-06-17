@@ -334,7 +334,7 @@ function createDetailConfig(): DetailConfig {
       detail,
       userPrompt: MENU_SINGLE_PASS_FAST_PROMPT,
       maxCompletionTokens: 3000,
-      timeoutMs: 24_000,
+      timeoutMs: 45_000,
       lowItemRetryThreshold: 12,
     };
   }
@@ -344,7 +344,7 @@ function createDetailConfig(): DetailConfig {
       detail,
       userPrompt: MENU_SINGLE_PASS_BALANCED_PROMPT,
       maxCompletionTokens: 3800,
-      timeoutMs: 25_500,
+      timeoutMs: 50_000,
       lowItemRetryThreshold: 15,
     };
   }
@@ -353,7 +353,7 @@ function createDetailConfig(): DetailConfig {
     detail,
     userPrompt: MENU_SINGLE_PASS_ACCURATE_RUNTIME_PROMPT,
     maxCompletionTokens: 2600,
-    timeoutMs: 27_000,
+    timeoutMs: 55_000,
     lowItemRetryThreshold: 15,
   };
 }
@@ -402,7 +402,7 @@ function createCompletenessRetryReason(attempt: ParseAttemptResult, detailConfig
 
 function shouldRetryExtraction(startedAt: number, detailConfig: DetailConfig): boolean {
   const elapsedMs = Date.now() - startedAt;
-  const retryBudgetMs = detailConfig.detail === "accurate" ? 22_000 : 12_000;
+  const retryBudgetMs = detailConfig.detail === "accurate" ? 42_000 : 25_000;
   return elapsedMs < retryBudgetMs;
 }
 
