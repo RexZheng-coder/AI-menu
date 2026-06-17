@@ -665,13 +665,17 @@ button:disabled {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
-  min-height: 224px;
+  min-height: 196px;
   padding: 18px;
   gap: 16px;
   border: 1px solid rgba(29, 26, 22, 0.12);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.84);
   box-shadow: 0 16px 34px rgba(38, 52, 45, 0.08);
+}
+
+.item-card--compact {
+  min-height: 154px;
 }
 
 .item-card__actions {
@@ -695,6 +699,10 @@ button:disabled {
   min-width: 0;
   flex-direction: column;
   gap: 14px;
+}
+
+.item-card--compact .item-card__content {
+  gap: 10px;
 }
 
 .item-card__header {

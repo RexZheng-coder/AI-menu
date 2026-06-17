@@ -43,6 +43,7 @@ export function renderMenuItemCard(
   content.append(header);
 
   const descriptionText = getDescriptionText(item);
+  const hasTags = item.tags_zh.length > 0;
 
   if (descriptionText) {
     const description = document.createElement("p");
@@ -51,7 +52,7 @@ export function renderMenuItemCard(
     content.append(description);
   }
 
-  if (item.tags_zh.length > 0) {
+  if (hasTags) {
     const tags = document.createElement("div");
     tags.className = "tag-list";
 
@@ -66,6 +67,10 @@ export function renderMenuItemCard(
 
   if (details) {
     content.append(details);
+  }
+
+  if (!descriptionText && !hasTags && !details) {
+    article.classList.add("item-card--compact");
   }
 
   const addButton = document.createElement("button");
