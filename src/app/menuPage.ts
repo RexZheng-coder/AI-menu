@@ -23,6 +23,7 @@ import {
   parseMenuImages,
   type ClientParseMetadata,
 } from "../lib/parseMenuImages.js";
+import { inferCurrencyFromPriceText, parsePriceAmount } from "../lib/priceUtils.js";
 import { mockMenu } from "../mock/menuMock.js";
 import type { Cart, CartItem, Menu, MenuItem, OrderSummary } from "../types/menu.js";
 
@@ -577,7 +578,7 @@ function saveEditedItem(formData: FormData): void {
     description_zh: readOptionalFormString(formData, "description_zh"),
     price: {
       amount: parsePriceAmount(priceRaw),
-      currency: "USD",
+      currency: inferCurrencyFromPriceText(priceRaw, findMenuItem(currentMenu, editingItemId ?? "")?.item.price.currency ?? inferMenuCurrency(currentMenu)),
       raw: priceRaw,
     },
     tags: editingItemId ? findMenuItem(currentMenu, editingItemId)?.item.tags ?? [] : [],
@@ -890,8 +891,20 @@ function createCart(): Cart {
     cart_id: cartId,
     menu_id: currentMenu.menu_id,
     items: cartItems,
-    total: calculateCartTotal(cartItems),
+    total: calculateCartTotal(cartItems, inferMenuCurrency(currentMenu)),
   };
+}
+
+function inferMenuCurrency(menu: Menu): string {
+  for (const category of menu.categories) {
+    for (const item of category.items) {
+      if (item.price.currency) {
+        return item.price.currency;
+      }
+    }
+  }
+
+  return "USD";
 }
 
 function updateCartItemQuantity(item: CartItem, quantity: number): CartItem {
@@ -1022,16 +1035,6 @@ function readFormString(formData: FormData, name: string): string {
 function readOptionalFormString(formData: FormData, name: string): string | null {
   const value = readFormString(formData, name);
   return value.length > 0 ? value : null;
-}
-
-function parsePriceAmount(raw: string | null): number | null {
-  if (!raw) {
-    return null;
-  }
-
-  const match = raw.replace(/,/g, "").match(/\d+(?:\.\d+)?/);
-  const value = match ? Number(match[0]) : null;
-  return value !== null && Number.isFinite(value) ? value : null;
 }
 
 function createItemId(categoryId: string, nameEn: string): string {

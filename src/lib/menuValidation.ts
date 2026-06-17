@@ -1,4 +1,5 @@
 import type { Menu, MenuCategory, MenuItem, Price, SpicyLevel } from "../types/menu.js";
+import { inferCurrencyFromPriceText, parsePriceAmount } from "./priceUtils.js";
 
 type SanitizedMenuOptions = {
   imageUrls?: string[];
@@ -96,7 +97,7 @@ function sanitizePrice(input: unknown): Price {
 
   return {
     amount: asNullableNumber(source.amount) ?? parsePriceAmount(raw),
-    currency: asString(source.currency) ?? "USD",
+    currency: asString(source.currency) ?? inferCurrencyFromPriceText(raw),
     raw,
   };
 }
@@ -154,15 +155,6 @@ function clampConfidence(input: unknown): number | undefined {
   }
 
   return Math.max(0, Math.min(1, input));
-}
-
-function parsePriceAmount(raw: string | null): number | null {
-  if (!raw) {
-    return null;
-  }
-
-  const match = raw.replace(/,/g, "").match(/\d+(?:\.\d+)?/);
-  return match ? Number(match[0]) : null;
 }
 
 function slugify(value: string): string {

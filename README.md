@@ -26,7 +26,7 @@ Route modes:
 - Mock menu parsing for static deployments
 - Bilingual menu display with English and Chinese names/descriptions
 - Category-based menu rendering
-- Dish cards with price, Chinese tags, spicy level, and subtle confidence display
+- Dish cards with prices, Chinese tags, and AI-estimated spicy level
 - AI parsing quality panel with category/item counts, provider/detail metadata, and retry/truncation hints
 - Original image comparison for the current upload session
 - Local human correction flow to edit, add, or delete parsed dishes before ordering
@@ -104,7 +104,7 @@ Key modules:
 - `src/mock/menuMock.ts`: Realistic bilingual mock menu used by static/mock parsing.
 - `src/lib/menuUtils.ts`: Cart item creation, cart totals, item lookup, and order summary generation.
 - `src/lib/parseMenuImages.ts`: Frontend-facing parser seam. Defaults to the backend parser and falls back to explicit mock mode with `?parse=mock`.
-- `src/lib/menuSinglePassPrompt.ts`: Single-pass MiMo vision prompt for bilingual extraction, tags, allergens, spicy level, confidence, and prices.
+- `src/lib/menuSinglePassPrompt.ts`: Single-pass MiMo vision prompt for bilingual extraction, meaning-based Chinese translations, tags, allergens, spicy level, and prices.
 - `src/lib/menuValidation.ts`: Sanitizes unknown AI-shaped JSON into the existing `Menu` type and rejects empty parsed menus.
 - `src/lib/menuHistory.ts`: Strongly typed localStorage helpers for saved menu history.
 - `src/components/*`: DOM-rendered UI components for upload, history, menu categories, item cards, tags, cart, and order summary.
@@ -230,7 +230,7 @@ The current generated screenshot file is ignored by Git and is not referenced di
 - OCR-first may miss tiny, blurred, cropped, or low-contrast text.
 - Real-mode vision parsing defaults to item coverage first. Dense menus may leave descriptions, tags, or allergens empty so more visible item names and prices are preserved.
 - If dense fallback is used, the frontend quality panel shows that core item information was parsed only.
-- Chinese translations, tags, allergens, spicy levels, and confidence values are AI-generated and may need user correction in a production system.
+- Chinese translations, tags, allergens, and spicy levels are AI-generated and may need user correction in a production system.
 - Very dense or complex menus may still need retries, clearer photos, `MENU_PARSE_DETAIL=fast` for demos, or temporary OCR-first comparison.
 - Image preprocessing is a safe no-op unless an optional `sharp` runtime is available.
 - The app is an MVP rather than a production ordering system.
@@ -242,7 +242,7 @@ The current generated screenshot file is ignored by Git and is not referenced di
 - Add provider-level retries, rate-limit handling, and model response tracing.
 - Support persistent menu history with a database.
 - Add user accounts only if saved history needs to travel across devices.
-- Improve OCR confidence display and user correction workflows.
+- Improve parse-quality review and user correction workflows.
 - Add export/share options for order summaries.
 
 ## Resume / Portfolio Bullet Suggestions

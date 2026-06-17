@@ -1,4 +1,5 @@
 import { renderTagPill } from "./TagPill.js";
+import { formatMenuPrice } from "../lib/priceUtils.js";
 import type { MenuCategory, MenuItem } from "../types/menu.js";
 
 export function renderMenuItemCard(
@@ -32,7 +33,7 @@ export function renderMenuItemCard(
 
   names.append(nameZh, nameEn);
 
-  const priceText = formatPrice(item);
+  const priceText = formatMenuPrice(item.price);
   const price = document.createElement("p");
   price.className = "item-card__price";
   price.textContent = priceText;
@@ -145,14 +146,6 @@ function renderItemDetails(item: MenuItem, category: Pick<MenuCategory, "name_en
   spice.textContent = `辣度 ${item.spicy_level}/3`;
   details.append(spice);
 
-  if (typeof item.confidence === "number") {
-    const confidence = document.createElement("span");
-    confidence.className = "confidence";
-    confidence.textContent = `${Math.round(item.confidence * 100)}%`;
-    confidence.setAttribute("aria-label", `Extraction confidence ${Math.round(item.confidence * 100)} percent`);
-    details.append(confidence);
-  }
-
   return details;
 }
 
@@ -201,19 +194,4 @@ const beverageKeywords = [
 
 function normalizeText(value: string): string {
   return value.trim().toLowerCase();
-}
-
-function formatPrice(item: MenuItem): string {
-  if (item.price.raw) {
-    return item.price.raw;
-  }
-
-  if (item.price.amount === null) {
-    return "Market price";
-  }
-
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: item.price.currency,
-  }).format(item.price.amount);
 }

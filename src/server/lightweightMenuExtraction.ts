@@ -1,4 +1,5 @@
 import { sanitizeMenu } from "../lib/menuValidation.js";
+import { inferCurrencyFromPriceText, parsePriceAmount } from "../lib/priceUtils.js";
 import type { Menu } from "../types/menu.js";
 
 export type LightweightMenuExtraction = {
@@ -185,7 +186,7 @@ function createMenuItem(item: LightweightMenuItem, categoryId: string, index: nu
     description_zh: item.description_zh,
     price: {
       amount: parsePriceAmount(item.price_raw),
-      currency: "USD",
+      currency: inferCurrencyFromPriceText(item.price_raw),
       raw: item.price_raw,
     },
     tags: item.tags,
@@ -371,15 +372,6 @@ function sanitizeConfidence(input: unknown): number {
   }
 
   return 0.8;
-}
-
-function parsePriceAmount(raw: string | null): number | null {
-  if (!raw) {
-    return null;
-  }
-
-  const match = raw.replace(/,/g, "").match(/\d+(?:\.\d+)?/);
-  return match ? Number(match[0]) : null;
 }
 
 function findTopLevelJsonObject(text: string): string | null {

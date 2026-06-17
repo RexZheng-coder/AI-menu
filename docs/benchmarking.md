@@ -44,7 +44,7 @@ Prioritize item coverage in this order:
 4. Chinese item name
 5. Descriptions
 6. Tags and spicy level
-7. Allergens and confidence
+7. Allergens
 
 If a dense menu is difficult, it is better to preserve more item names and prices with sparse optional fields than to return a rich summary of only a few dishes.
 

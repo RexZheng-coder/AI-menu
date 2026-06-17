@@ -74,7 +74,7 @@ Run this against the deployed URL:
 - Upload screen shows `Real AI Mode` at `/` and `Mock Demo Mode` at `/?parse=mock`.
 - Selecting a JPG, PNG, or WebP image creates a preview.
 - `Scan Menu` returns a MiMo-parsed menu in real mode, or the sample parsed menu at `?parse=mock`.
-- Restaurant header, bilingual categories, dish cards, tags, spice levels, confidence, and prices render.
+- Restaurant header, bilingual categories, dish cards, tags, AI-estimated spice levels, and prices render.
 - `+` buttons add dishes to the cart.
 - Quantity controls update totals.
 - Item notes are retained in the cart.
@@ -104,7 +104,7 @@ The Vercel route `POST /api/menus/parse` accepts multipart image uploads from th
 
 API keys must stay server-side only in `MIMO_API_KEY`. Real image parsing requires a MiMo model that supports image understanding; the default is `mimo-v2.5`. Mock mode is still available explicitly with `?parse=mock`.
 
-Real parsing defaults to `MENU_AI_PROVIDER=mimo`, `MENU_PARSE_STRATEGY=vision`, and `MENU_PARSE_DETAIL=accurate`. This single-pass MiMo vision parser reads uploaded images and prioritizes complete visible item coverage, bilingual item names, categories, and prices. Optional descriptions, tags, allergens, spicy level, and confidence are sanitized into the existing `Menu` contract; dense menus may leave optional fields empty so more visible items are preserved. OCR-first remains available only when explicitly selected with `MENU_PARSE_STRATEGY=ocr_first`.
+Real parsing defaults to `MENU_AI_PROVIDER=mimo`, `MENU_PARSE_STRATEGY=vision`, and `MENU_PARSE_DETAIL=accurate`. This single-pass MiMo vision parser reads uploaded images and prioritizes complete visible item coverage, meaning-based Chinese item names, categories, prices, and spicy-level estimates. Optional descriptions, tags, and allergens are sanitized into the existing `Menu` contract; dense menus may leave optional fields empty so more visible items are preserved. OCR-first remains available only when explicitly selected with `MENU_PARSE_STRATEGY=ocr_first`.
 
 `MENU_PARSE_DETAIL=fast | balanced | accurate` controls the speed/completeness tradeoff. Accurate is the default and may be slower; fast is useful for demos but can be less complete on dense menus.
 

@@ -21,7 +21,7 @@ export function createCartItemFromMenuItem(item: MenuItem, quantity = 1): CartIt
   };
 }
 
-export function calculateCartTotal(cartItems: CartItem[]): Cart["total"] {
+export function calculateCartTotal(cartItems: CartItem[], currency = "USD"): Cart["total"] {
   const subtotal = roundCurrency(
     cartItems.reduce((sum, item) => sum + (item.subtotal ?? 0), 0),
   );
@@ -31,7 +31,7 @@ export function calculateCartTotal(cartItems: CartItem[]): Cart["total"] {
     tax: null,
     tip: null,
     estimated_total: subtotal,
-    currency: "USD",
+    currency,
   };
 }
 

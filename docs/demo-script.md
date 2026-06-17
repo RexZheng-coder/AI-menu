@@ -8,7 +8,7 @@ Restaurant menus can be hard to read when they are photographed, translated inco
 
 First, I start from the upload screen and choose a menu image. By default, the app uses the Vercel serverless MiMo parser when configured, while `?parse=mock` is available for a cost-free sample menu demo.
 
-The parsed result is displayed like a food ordering app: dishes are grouped by category, each item has English and Chinese names, description space when available, tags, spice level, price, and a subtle parse confidence score. I can compare the result with the original image and locally edit, add, or delete dishes before ordering.
+The parsed result is displayed like a food ordering app: dishes are grouped by category, each item has original and Chinese names, description space when available, tags, AI-estimated spice level, and price. I can compare the result with the original image and locally edit, add, or delete dishes before ordering.
 
 Then I add a few dishes to the cart, adjust quantities, add notes like "less spicy" or "no onion", and generate a bilingual, English, or Chinese order summary that can be copied and shown to a waiter.
 
@@ -22,7 +22,7 @@ For the real parsing path, the same frontend `parseMenuImages` seam can post to 
 2. Upload: choose a sample menu image and click `Scan Menu`.
 3. Quality: point out item/category counts, parse detail, provider metadata, and the original-image comparison.
 4. Editing: correct an item, add a missing item, or delete an incorrect item locally.
-5. Menu: show bilingual categories, dish cards, prices, tags, spice level, and confidence.
+5. Menu: show bilingual categories, dish cards, prices, tags, and AI-estimated spice level.
 6. Cart: add items, adjust quantities, and enter item notes.
 7. Summary: generate and copy a waiter-ready order summary.
 8. History: reload or use `Recent Menus` to show localStorage persistence.

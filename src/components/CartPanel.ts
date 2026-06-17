@@ -45,14 +45,14 @@ export function renderCartPanel(props: CartPanelProps): HTMLElement {
   list.className = "cart-list";
 
   for (const item of props.cart.items) {
-    list.append(renderCartItem(item, props));
+    list.append(renderCartItem(item, props, props.cart.total.currency));
   }
 
   panel.append(list, renderCartTotal(props.cart), renderSummaryActions(props), renderSummary(props));
   return panel;
 }
 
-function renderCartItem(item: CartItem, props: CartPanelProps): HTMLElement {
+function renderCartItem(item: CartItem, props: CartPanelProps, currency: string): HTMLElement {
   const row = document.createElement("article");
   row.className = "cart-item";
 
@@ -74,13 +74,13 @@ function renderCartItem(item: CartItem, props: CartPanelProps): HTMLElement {
 
   const subtotal = document.createElement("p");
   subtotal.className = "cart-item__subtotal";
-  subtotal.textContent = formatNullableCurrency(item.subtotal, "USD");
+  subtotal.textContent = formatNullableCurrency(item.subtotal, currency);
 
   header.append(names, subtotal);
 
   const price = document.createElement("p");
   price.className = "cart-item__price";
-  price.textContent = `Unit ${formatNullableCurrency(item.unit_price, "USD")}`;
+  price.textContent = `Unit ${formatNullableCurrency(item.unit_price, currency)}`;
 
   const controls = document.createElement("div");
   controls.className = "cart-item__controls";
