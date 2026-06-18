@@ -22,7 +22,7 @@ export const MENU_SINGLE_PASS_SCHEMA_TEXT = `{
 "price_raw": string | null,
 "tags": string[],
 "tags_zh": string[],
-"spicy_level": 0 | 1 | 2 | 3,
+"spicy_level": 0 | 1 | 2 | 3 | 4 | 5,
 "allergens": string[]
 }
 ]
@@ -44,8 +44,8 @@ Accuracy-first rules:
 8. Translate item names into concise, natural, easy-to-understand Chinese. Prefer meaning-based culinary translation over phonetic transliteration.
 9. Translate descriptions only if visible and short enough. Otherwise use null.
 10. Generate short useful tags only when supported by the item name or visible description.
-11. Estimate spicy_level from the item name and visible description. Use 0 for not spicy or unknown, 1 for mildly spicy, 2 for spicy, and 3 for very spicy.
-12. Extract allergens only when visible or strongly implied.
+11. Estimate spicy_level from the item name and visible description on a 0–5 scale: 0 = not spicy or unknown, 1 = hint of heat, 2 = mild, 3 = medium, 4 = hot, 5 = very hot.
+12. Return an allergens array for every item. Infer conservatively from visible ingredients and strongly implied dish names. Use [] when none can be identified.
 13. If output space is limited, keep more items and omit optional descriptions/tags instead of skipping items.
 14. Return JSON only.
 
@@ -66,7 +66,7 @@ Priority order if the menu is dense:
 8. allergens
 
 Allowed English allergen values:
-gluten, dairy, egg, peanut, tree_nut, shellfish, fish, soy
+gluten, dairy, egg, peanut, tree_nut, shellfish, mollusk, fish, seafood, soy, sesame, mustard, celery, sulfite, coconut
 
 Useful English tag examples:
 chicken, beef, pork, seafood, vegetarian, vegan, dessert, drink, noodle, rice, fried, soup, salad, spicy, dairy
@@ -103,29 +103,31 @@ Accuracy-first means complete item coverage:
 - Example: "NDUJA, SPIANATA & GORGONZOLA" -> "意式辣肉酱香肠、意式萨拉米、戈贡佐拉蓝纹奶酪".
 - Example: "MARINARA" pizza -> "番茄蒜香披萨", not "玛格丽特披萨".
 - Preserve visible or clearly implied currency symbols in price_raw when the menu uses one currency.
-- Guess spicy_level from the item name when obvious, such as nduja, spicy, hot, arrabbiata, jalapeño, chili, pepper, buffalo, mala, curry, or similar terms.
-- Each item should include name_en, name_zh, description_en, description_zh, price_raw, and spicy_level.
+- Guess spicy_level from the item name and visible ingredients on a 0–5 scale. Use 0 for no visible heat or unknown, 1 for a hint, 2 for mild, 3 for medium, 4 for hot, and 5 for very hot. Terms such as nduja, spicy, hot, arrabbiata, jalapeño, chili, pepper, buffalo, mala, curry, or similar names should influence the estimate.
+- Each item must include name_en, name_zh, description_en, description_zh, price_raw, spicy_level, and allergens.
+- Return allergens as short English canonical values. Infer conservatively from visible ingredients or strongly implied dish names. Examples: cheese/cream/butter -> dairy; pasta/bread/noodles -> gluten; shrimp/crab/lobster -> shellfish; salmon/tuna/anchovy -> fish; tofu/miso/soy sauce -> soy; egg/mayonnaise -> egg. Use [] when none are identifiable.
 - Keep descriptions concise. Use ingredient lists as descriptions; do not invent marketing copy.
 - Tags are optional. Include tags_zh only when cheap and obvious, otherwise omit them so descriptions and item coverage fit.
-- Backend will default tags and allergens.
+- Allowed allergens: gluten, dairy, egg, peanut, tree_nut, shellfish, mollusk, fish, seafood, soy, sesame, mustard, celery, sulfite, coconut.
+- Backend will default missing tags.
 - If output space is tight, preserve all item names/prices first, then keep short descriptions for as many items as possible.
 - Use name_en "Menu" and name_zh "菜单" if no category heading is visible.
 - If nothing can be read, return {"restaurant_name":null,"cuisine_type":null,"categories":[]}.
 
 Accurate shape:
-{"restaurant_name":string|null,"cuisine_type":string|null,"categories":[{"name_en":string,"name_zh":string,"items":[{"name_en":string,"name_zh":string,"description_en":string|null,"description_zh":string|null,"price_raw":string|null,"tags_zh"?:string[],"spicy_level":0|1|2|3}]}]}`;
+{"restaurant_name":string|null,"cuisine_type":string|null,"categories":[{"name_en":string,"name_zh":string,"items":[{"name_en":string,"name_zh":string,"description_en":string|null,"description_zh":string|null,"price_raw":string|null,"tags_zh"?:string[],"spicy_level":0|1|2|3|4|5,"allergens":string[]}]}]}`;
 
 export const MENU_SINGLE_PASS_FAST_PROMPT = `Read the menu image and return final minified JSON only. Do not think step by step. Do not explain. Do not use markdown.
 
 Extract all readable visible menu items in reading order. Do not summarize, sample, or intentionally skip clearly visible items.
-To stay compact, each item only needs name_en, name_zh, price_raw, and spicy_level. Omit optional item fields so more items fit.
-Keep item names, prices, categories, Chinese item names, and spice estimates. Preserve visible or clearly implied currency symbols in price_raw. Translate non-English culinary terms by meaning for Chinese diners instead of opaque phonetic transliteration. Backend will default missing optional fields.
+To stay compact, each item only needs name_en, name_zh, price_raw, spicy_level, and allergens. Omit other optional item fields so more items fit.
+Keep item names, prices, categories, Chinese item names, 0–5 spice estimates, and conservative allergen categories. Preserve visible or clearly implied currency symbols in price_raw. Translate non-English culinary terms by meaning for Chinese diners instead of opaque phonetic transliteration. Use [] when no allergen is identifiable. Backend will default other missing optional fields.
 
 Use name_en "Menu" and name_zh "菜单" if no category heading is visible.
 If nothing can be read, return {"restaurant_name":null,"cuisine_type":null,"categories":[]}.
 
 Compact shape:
-{"restaurant_name":string|null,"cuisine_type":string|null,"categories":[{"name_en":string,"name_zh":string,"items":[{"name_en":string,"name_zh":string,"price_raw":string|null,"spicy_level":0|1|2|3}]}]}`;
+{"restaurant_name":string|null,"cuisine_type":string|null,"categories":[{"name_en":string,"name_zh":string,"items":[{"name_en":string,"name_zh":string,"price_raw":string|null,"spicy_level":0|1|2|3|4|5,"allergens":string[]}]}]}`;
 
 export const MENU_SINGLE_PASS_COMPACT_RETRY_PROMPT = `${MENU_SINGLE_PASS_ACCURATE_PROMPT}
 
@@ -143,13 +145,14 @@ Rules:
 - Extract all readable visible categories and menu items in reading order.
 - Do not summarize or sample items.
 - For each category include only name_en, name_zh, and items.
-- For each item include only name_en, name_zh, price_raw, and spicy_level.
+- For each item include only name_en, name_zh, price_raw, spicy_level, and allergens.
 - Preserve price_raw exactly as shown. If the menu clearly uses one currency symbol, include that symbol with every price when visible or clearly implied.
 - Translate item names into concise, natural Chinese. Translate non-English culinary terms by meaning, not opaque phonetic transliteration.
 - Use null for unclear or missing prices.
-- Do not include descriptions, tags, allergens, confidence, markdown, comments, or explanations.
+- Use a 0–5 spicy_level and a conservative allergens array. Use [] if no allergen is identifiable.
+- Do not include descriptions, tags, confidence, markdown, comments, or explanations.
 - If no category heading is visible, use "Menu" and "菜单".
 - If nothing can be read, return {"restaurant_name":null,"cuisine_type":null,"categories":[]}.
 
 Compact shape:
-{"restaurant_name":string|null,"cuisine_type":string|null,"categories":[{"name_en":string,"name_zh":string,"items":[{"name_en":string,"name_zh":string,"price_raw":string|null,"spicy_level":0|1|2|3}]}]}`;
+{"restaurant_name":string|null,"cuisine_type":string|null,"categories":[{"name_en":string,"name_zh":string,"items":[{"name_en":string,"name_zh":string,"price_raw":string|null,"spicy_level":0|1|2|3|4|5,"allergens":string[]}]}]}`;

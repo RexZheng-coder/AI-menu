@@ -1,4 +1,5 @@
 import type { Menu, MenuCategory, MenuItem, Price, SpicyLevel } from "../types/menu.js";
+import { normalizeAllergens } from "./allergenUtils.js";
 import { inferCurrencyFromPriceText, parsePriceAmount } from "./priceUtils.js";
 
 type SanitizedMenuOptions = {
@@ -85,7 +86,7 @@ function sanitizeItem(input: unknown, categoryId: string, index: number): MenuIt
     tags: asStringArray(source.tags),
     tags_zh: asStringArray(source.tags_zh),
     spicy_level: sanitizeSpicyLevel(source.spicy_level),
-    allergens: asStringArray(source.allergens),
+    allergens: normalizeAllergens(asStringArray(source.allergens)),
     is_recommended: asBoolean(source.is_recommended),
     confidence: clampConfidence(source.confidence),
   };
@@ -138,12 +139,12 @@ function asStringArray(input: unknown): string[] {
 }
 
 function sanitizeSpicyLevel(input: unknown): SpicyLevel {
-  if (input === 0 || input === 1 || input === 2 || input === 3) {
+  if (input === 0 || input === 1 || input === 2 || input === 3 || input === 4 || input === 5) {
     return input;
   }
 
   if (typeof input === "number" && Number.isFinite(input)) {
-    return Math.max(0, Math.min(3, Math.round(input))) as SpicyLevel;
+    return Math.max(0, Math.min(5, Math.round(input))) as SpicyLevel;
   }
 
   return 0;

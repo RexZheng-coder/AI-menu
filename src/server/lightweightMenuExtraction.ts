@@ -1,6 +1,7 @@
 import { sanitizeMenu } from "../lib/menuValidation.js";
+import { normalizeAllergens } from "../lib/allergenUtils.js";
 import { inferCurrencyFromPriceText, parsePriceAmount } from "../lib/priceUtils.js";
-import type { Menu } from "../types/menu.js";
+import type { Menu, SpicyLevel } from "../types/menu.js";
 
 export type LightweightMenuExtraction = {
   restaurant_name: string | null;
@@ -27,7 +28,7 @@ export type LightweightMenuItem = {
   price_raw: string | null;
   tags: string[];
   tags_zh: string[];
-  spicy_level: 0 | 1 | 2 | 3;
+  spicy_level: SpicyLevel;
   allergens: string[];
   confidence: number;
 };
@@ -122,7 +123,7 @@ function sanitizeLightweightItem(input: unknown, index: number): LightweightMenu
     tags: asStringArray(source.tags),
     tags_zh: asStringArray(source.tags_zh),
     spicy_level: sanitizeSpicyLevel(source.spicy_level),
-    allergens: asStringArray(source.allergens),
+    allergens: normalizeAllergens(asStringArray(source.allergens)),
     confidence: sanitizeConfidence(source.confidence),
   };
 }
@@ -354,13 +355,13 @@ function asStringArray(input: unknown): string[] {
   });
 }
 
-function sanitizeSpicyLevel(input: unknown): 0 | 1 | 2 | 3 {
-  if (input === 0 || input === 1 || input === 2 || input === 3) {
+function sanitizeSpicyLevel(input: unknown): SpicyLevel {
+  if (input === 0 || input === 1 || input === 2 || input === 3 || input === 4 || input === 5) {
     return input;
   }
 
   if (typeof input === "number" && Number.isFinite(input)) {
-    return Math.max(0, Math.min(3, Math.round(input))) as 0 | 1 | 2 | 3;
+    return Math.max(0, Math.min(5, Math.round(input))) as SpicyLevel;
   }
 
   return 0;

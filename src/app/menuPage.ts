@@ -24,13 +24,14 @@ import {
   type ClientParseMetadata,
 } from "../lib/parseMenuImages.js";
 import { inferCurrencyFromPriceText, parsePriceAmount } from "../lib/priceUtils.js";
+import { normalizeAllergens } from "../lib/allergenUtils.js";
 import {
   prepareMenuImages,
   revokePreparedMenuImages,
   type PreparedMenuImage,
 } from "../lib/clientImageCompression.js";
 import { mockMenu } from "../mock/menuMock.js";
-import type { Cart, CartItem, Menu, MenuItem, OrderSummary } from "../types/menu.js";
+import type { Cart, CartItem, Menu, MenuItem, OrderSummary, SpicyLevel } from "../types/menu.js";
 
 const appRoot = document.querySelector<HTMLElement>("#app");
 
@@ -200,7 +201,11 @@ function renderQualityAndSourcePanel(menu: Menu): HTMLElement {
   const durationText = metadata.duration_ms ? ` · ${(metadata.duration_ms / 1000).toFixed(1)}s` : "";
   detail.textContent = `${metadata.provider} · ${metadata.parse_detail}${durationText}. Please double-check the original menu before ordering.`;
 
-  copy.append(title, detail);
+  const safetyNote = document.createElement("p");
+  safetyNote.className = "quality-panel__safety";
+  safetyNote.textContent = "辣度与过敏原为 AI 提示，请向餐厅确认。";
+
+  copy.append(title, detail, safetyNote);
 
   if (metadata.recovered_from_truncation || metadata.retry_used) {
     const warning = document.createElement("p");
@@ -311,6 +316,7 @@ function initializeMenuNavigation(shell: HTMLElement, menu: Menu): () => void {
   const navButtons = Array.from(shell.querySelectorAll<HTMLButtonElement>(".category-nav__link"));
   const sections = Array.from(shell.querySelectorAll<HTMLElement>(".category-section"));
   const menuPage = shell.querySelector<HTMLElement>(".menu-page");
+  const itemCards = Array.from(shell.querySelectorAll<HTMLElement>(".item-card"));
 
   if (navButtons.length === 0 || sections.length === 0 || !menuPage) {
     return () => undefined;
@@ -320,6 +326,7 @@ function initializeMenuNavigation(shell: HTMLElement, menu: Menu): () => void {
   let scrollFrame = 0;
   let touchStartX = 0;
   let touchStartY = 0;
+  let revealObserver: IntersectionObserver | null = null;
 
   const setActiveCategory = (categoryId: string): void => {
     if (!categoryId || activeCategoryId === categoryId) {
@@ -408,6 +415,28 @@ function initializeMenuNavigation(shell: HTMLElement, menu: Menu): () => void {
   window.addEventListener("scroll", onScroll, { passive: true });
   menuPage.addEventListener("touchstart", onTouchStart, { passive: true });
   menuPage.addEventListener("touchend", onTouchEnd, { passive: true });
+  shell.classList.add("menu-animations-ready");
+
+  if ("IntersectionObserver" in window) {
+    revealObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("item-card--revealed");
+            revealObserver?.unobserve(entry.target);
+          }
+        }
+      },
+      {
+        rootMargin: "0px 0px -6% 0px",
+        threshold: 0.08,
+      },
+    );
+    itemCards.forEach((card) => revealObserver?.observe(card));
+  } else {
+    itemCards.forEach((card) => card.classList.add("item-card--revealed"));
+  }
+
   updateActiveCategory();
 
   return () => {
@@ -415,6 +444,7 @@ function initializeMenuNavigation(shell: HTMLElement, menu: Menu): () => void {
     menuPage.removeEventListener("touchstart", onTouchStart);
     menuPage.removeEventListener("touchend", onTouchEnd);
     buttonHandlers.forEach(({ button, handler }) => button.removeEventListener("click", handler));
+    revealObserver?.disconnect();
 
     if (scrollFrame !== 0) {
       window.cancelAnimationFrame(scrollFrame);
@@ -531,6 +561,13 @@ function renderEditDialog(menu: Menu): HTMLElement {
     renderEditField("Price text", "price_raw", editingItem?.price.raw ?? ""),
     renderEditField("English description", "description_en", editingItem?.description_en ?? ""),
     renderEditField("Chinese description", "description_zh", editingItem?.description_zh ?? ""),
+    renderSpicyLevelField(editingItem?.spicy_level ?? 0),
+    renderEditField(
+      "Allergens (comma separated)",
+      "allergens",
+      (editingItem?.allergens ?? []).join(", "),
+      "e.g. dairy, egg, gluten, shellfish",
+    ),
     renderEditActions(),
   );
 
@@ -538,7 +575,7 @@ function renderEditDialog(menu: Menu): HTMLElement {
   return overlay;
 }
 
-function renderEditField(labelText: string, name: string, value: string): HTMLElement {
+function renderEditField(labelText: string, name: string, value: string, placeholder = ""): HTMLElement {
   const label = document.createElement("label");
   label.className = "edit-field";
 
@@ -548,9 +585,32 @@ function renderEditField(labelText: string, name: string, value: string): HTMLEl
   const input = document.createElement("input");
   input.name = name;
   input.value = value;
+  input.placeholder = placeholder;
   input.required = name === "name_en" || name === "name_zh";
 
   label.append(span, input);
+  return label;
+}
+
+function renderSpicyLevelField(value: SpicyLevel): HTMLElement {
+  const label = document.createElement("label");
+  label.className = "edit-field";
+
+  const span = document.createElement("span");
+  span.textContent = "Spice level";
+
+  const select = document.createElement("select");
+  select.name = "spicy_level";
+
+  for (let level = 0; level <= 5; level += 1) {
+    const option = document.createElement("option");
+    option.value = String(level);
+    option.textContent = level === 0 ? "None / unknown" : `${"🌶️".repeat(level)} (${level}/5)`;
+    option.selected = level === value;
+    select.append(option);
+  }
+
+  label.append(span, select);
   return label;
 }
 
@@ -753,8 +813,13 @@ function saveEditedItem(formData: FormData): void {
     },
     tags: editingItemId ? findMenuItem(currentMenu, editingItemId)?.item.tags ?? [] : [],
     tags_zh: editingItemId ? findMenuItem(currentMenu, editingItemId)?.item.tags_zh ?? [] : [],
-    spicy_level: editingItemId ? findMenuItem(currentMenu, editingItemId)?.item.spicy_level ?? 0 : 0,
-    allergens: editingItemId ? findMenuItem(currentMenu, editingItemId)?.item.allergens ?? [] : [],
+    spicy_level: readSpicyLevel(formData),
+    allergens: normalizeAllergens(
+      readFormString(formData, "allergens")
+        .split(/[,，]/)
+        .map((value) => value.trim())
+        .filter(Boolean),
+    ),
     is_recommended: editingItemId ? findMenuItem(currentMenu, editingItemId)?.item.is_recommended : false,
     confidence: editingItemId ? findMenuItem(currentMenu, editingItemId)?.item.confidence ?? 1 : 1,
   };
@@ -1225,6 +1290,11 @@ function readFormString(formData: FormData, name: string): string {
 function readOptionalFormString(formData: FormData, name: string): string | null {
   const value = readFormString(formData, name);
   return value.length > 0 ? value : null;
+}
+
+function readSpicyLevel(formData: FormData): SpicyLevel {
+  const value = Number(readFormString(formData, "spicy_level"));
+  return Math.max(0, Math.min(5, Number.isFinite(value) ? Math.round(value) : 0)) as SpicyLevel;
 }
 
 function createItemId(categoryId: string, nameEn: string): string {

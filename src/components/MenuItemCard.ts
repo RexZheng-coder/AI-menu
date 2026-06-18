@@ -1,4 +1,5 @@
 import { renderTagPill } from "./TagPill.js";
+import { getAllergenLabelZh, normalizeAllergens } from "../lib/allergenUtils.js";
 import { formatMenuPrice } from "../lib/priceUtils.js";
 import type { MenuCategory, MenuItem } from "../types/menu.js";
 
@@ -66,13 +67,19 @@ export function renderMenuItemCard(
     content.append(tags);
   }
 
+  const allergens = renderAllergenList(item);
+
+  if (allergens) {
+    content.append(allergens);
+  }
+
   const details = renderItemDetails(item, category);
 
   if (details) {
     content.append(details);
   }
 
-  if (!descriptionText && !hasTags && !details) {
+  if (!descriptionText && !hasTags && !allergens && !details) {
     article.classList.add("item-card--compact");
   }
 
@@ -126,6 +133,12 @@ function renderOrderControl(
 ): HTMLElement {
   const control = document.createElement("div");
   control.className = "item-order-control";
+  control.setAttribute("aria-live", "polite");
+
+  const pulse = (): void => {
+    control.classList.remove("item-order-control--pulse");
+    window.requestAnimationFrame(() => control.classList.add("item-order-control--pulse"));
+  };
 
   const refresh = (): void => {
     const quantity = actions.getCartQuantity(item.item_id);
@@ -140,6 +153,7 @@ function renderOrderControl(
       addButton.addEventListener("click", () => {
         actions.onAddToCart(item);
         refresh();
+        pulse();
       });
       control.replaceChildren(addButton);
       return;
@@ -148,6 +162,7 @@ function renderOrderControl(
     const decreaseButton = renderQuantityButton("-", `Decrease ${item.name_zh}`, () => {
       actions.onDecreaseCartItem(item.item_id);
       refresh();
+      pulse();
     });
     const quantityLabel = document.createElement("span");
     quantityLabel.className = "item-order-control__quantity";
@@ -156,6 +171,7 @@ function renderOrderControl(
     const increaseButton = renderQuantityButton("+", `Add another ${item.name_zh}`, () => {
       actions.onAddToCart(item);
       refresh();
+      pulse();
     });
 
     control.replaceChildren(decreaseButton, quantityLabel, increaseButton);
@@ -207,7 +223,7 @@ function isPlaceholderDescription(description: string): boolean {
 }
 
 function renderItemDetails(item: MenuItem, category: Pick<MenuCategory, "name_en" | "name_zh">): HTMLElement | null {
-  if (isBeverageItem(item, category)) {
+  if (isBeverageItem(item, category) || item.spicy_level === 0) {
     return null;
   }
 
@@ -216,10 +232,49 @@ function renderItemDetails(item: MenuItem, category: Pick<MenuCategory, "name_en
 
   const spice = document.createElement("span");
   spice.className = `spice-meter spice-meter--level-${item.spicy_level}`;
-  spice.textContent = `辣度 ${item.spicy_level}/3`;
+  spice.setAttribute("aria-label", `辣度 ${item.spicy_level}，最高 5`);
+
+  const spiceLabel = document.createElement("span");
+  spiceLabel.className = "spice-meter__label";
+  spiceLabel.textContent = "辣度";
+
+  const peppers = document.createElement("span");
+  peppers.className = "spice-meter__peppers";
+  peppers.setAttribute("aria-hidden", "true");
+  peppers.textContent = "🌶️".repeat(item.spicy_level);
+
+  spice.append(spiceLabel, peppers);
   details.append(spice);
 
   return details;
+}
+
+function renderAllergenList(item: MenuItem): HTMLElement | null {
+  const allergens = normalizeAllergens(item.allergens ?? []);
+
+  if (allergens.length === 0) {
+    return null;
+  }
+
+  const section = document.createElement("div");
+  section.className = "allergen-list";
+  section.setAttribute("aria-label", "AI allergen indicators");
+
+  const label = document.createElement("span");
+  label.className = "allergen-list__label";
+  label.textContent = "过敏原";
+  label.title = "AI 推测，请向餐厅确认";
+  section.append(label);
+
+  for (const allergen of allergens) {
+    const pill = document.createElement("span");
+    pill.className = "allergen-pill";
+    pill.textContent = getAllergenLabelZh(allergen);
+    pill.title = `${allergen} · AI 推测，请向餐厅确认`;
+    section.append(pill);
+  }
+
+  return section;
 }
 
 function isBeverageItem(item: MenuItem, category: Pick<MenuCategory, "name_en" | "name_zh">): boolean {

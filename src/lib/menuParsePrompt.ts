@@ -10,7 +10,7 @@ Extract the visible menu into the existing Menu contract:
 - each item with item_id, name_en, name_zh, descriptions, price, tags, tags_zh, spicy_level, allergens, is_recommended, confidence
 - price.amount must be a number or null
 - price.raw must be the visible price string or null
-- spicy_level must be 0, 1, 2, or 3
+- spicy_level must be an integer from 0 to 5
 - confidence must be 0 to 1
 
 Translate item and category names into Chinese. If text is unclear, make a conservative best effort and lower confidence.
@@ -73,7 +73,7 @@ export const MENU_PARSE_JSON_SCHEMA = {
                 },
                 tags: { type: "array", items: { type: "string" } },
                 tags_zh: { type: "array", items: { type: "string" } },
-                spicy_level: { type: "integer", enum: [0, 1, 2, 3] },
+                spicy_level: { type: "integer", enum: [0, 1, 2, 3, 4, 5] },
                 allergens: { type: "array", items: { type: "string" } },
                 is_recommended: { type: "boolean" },
                 confidence: { type: "number", minimum: 0, maximum: 1 },

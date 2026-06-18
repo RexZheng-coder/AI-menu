@@ -10,7 +10,7 @@ export type RestaurantInfo = {
   cuisine_type?: string | null;
 };
 
-export type SpicyLevel = 0 | 1 | 2 | 3;
+export type SpicyLevel = 0 | 1 | 2 | 3 | 4 | 5;
 
 export type MenuItem = {
   item_id: string;

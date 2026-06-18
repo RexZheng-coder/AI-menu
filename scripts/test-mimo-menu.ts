@@ -33,6 +33,9 @@ const startedAt = Date.now();
 try {
   const menu = await parseMenuWithMiMo([image]);
   const itemCount = menu.categories.reduce((sum, category) => sum + category.items.length, 0);
+  const items = menu.categories.flatMap((category) => category.items);
+  const allergenTaggedItemCount = items.filter((item) => (item.allergens?.length ?? 0) > 0).length;
+  const maxSpicyLevel = items.reduce((maximum, item) => Math.max(maximum, item.spicy_level), 0);
   const diagnostics = getLastMiMoChatDiagnostics();
 
   console.log("status: OK");
@@ -51,6 +54,8 @@ try {
   console.log(`restaurant: ${menu.restaurant.name}`);
   console.log(`categories: ${menu.categories.length}`);
   console.log(`items: ${itemCount}`);
+  console.log(`allergen_tagged_items: ${allergenTaggedItemCount}`);
+  console.log(`max_spicy_level: ${maxSpicyLevel}`);
 } catch (error) {
   const diagnostics = getLastMiMoChatDiagnostics();
 

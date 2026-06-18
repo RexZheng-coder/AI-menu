@@ -26,6 +26,7 @@ Route modes:
 - Mock menu parsing for static deployments
 - Bilingual menu display with English and Chinese names/descriptions
 - Category-based menu rendering
+- Five-level chili indicators and AI-generated allergen labels
 - Dish cards with prices, Chinese tags, and AI-estimated spicy level
 - AI parsing quality panel with category/item counts, provider/detail metadata, and retry/truncation hints
 - Original image comparison for the current upload session
@@ -231,7 +232,7 @@ The current generated screenshot file is ignored by Git and is not referenced di
 - OCR-first may miss tiny, blurred, cropped, or low-contrast text.
 - Real-mode vision parsing defaults to item coverage first. Dense menus may leave descriptions, tags, or allergens empty so more visible item names and prices are preserved.
 - If dense fallback is used, the frontend quality panel shows that core item information was parsed only.
-- Chinese translations, tags, allergens, and spicy levels are AI-generated and may need user correction in a production system.
+- Chinese translations, tags, allergen labels, and five-level spicy estimates are AI-generated. Allergy-sensitive users must confirm ingredients and cross-contamination risks with the restaurant.
 - Very dense or complex menus may still need retries, clearer photos, `MENU_PARSE_DETAIL=fast` for demos, or temporary OCR-first comparison.
 - Image preprocessing is a safe no-op unless an optional `sharp` runtime is available.
 - The app is an MVP rather than a production ordering system.

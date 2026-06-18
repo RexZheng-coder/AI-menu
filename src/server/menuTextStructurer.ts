@@ -58,9 +58,10 @@ export async function structureMenuTextWithMiMo(
 
 function createStructuringPrompt(ocrText: string): string {
   return `Convert this restaurant menu text into minified JSON only.
-Do not translate, tag, infer allergens, infer spice, or add commentary.
+Translate item/category names into concise natural Chinese. Infer allergen categories conservatively from visible ingredients or strongly implied dish names. Estimate spicy_level from 0 to 5.
 If a value is not visible, use null. Preserve visible price text exactly in price_raw.
 Keep description_en short, maximum 8 words. Use null for add-on notes that are not dish descriptions.
+Use [] when no allergen can be identified. Allowed allergens: gluten, dairy, egg, peanut, tree_nut, shellfish, mollusk, fish, seafood, soy, sesame, mustard, celery, sulfite, coconut.
 Do not include markdown or whitespace outside JSON.
 Use this exact shape:
 {
@@ -69,11 +70,16 @@ Use this exact shape:
   "categories": [
     {
       "name_en": string,
+      "name_zh": string,
       "items": [
         {
           "name_en": string,
+          "name_zh": string,
           "description_en": string | null,
-          "price_raw": string | null
+          "description_zh": string | null,
+          "price_raw": string | null,
+          "spicy_level": 0 | 1 | 2 | 3 | 4 | 5,
+          "allergens": string[]
         }
       ]
     }

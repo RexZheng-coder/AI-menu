@@ -154,5 +154,5 @@ DeepSeek is not used for vision parsing in this app because `deepseek-v4-flash` 
 ## Limitations
 
 - OCR may miss small, blurred, cropped, or low-contrast text.
-- MiMo-generated Chinese translation, tags, allergens, and spicy level may need correction.
+- MiMo-generated Chinese translation, tags, allergen categories, and 0–5 spicy level may need correction. Allergy-sensitive users must confirm with the restaurant.
 - Complex menus may still need retries, clearer photos, fewer uploaded pages, detail-mode comparison, or temporary OCR-first comparison.
