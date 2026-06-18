@@ -6,6 +6,8 @@ export function renderMenuItemCard(
   item: MenuItem,
   actions: {
     onAddToCart: (item: MenuItem) => void;
+    onDecreaseCartItem: (itemId: string) => void;
+    getCartQuantity: (itemId: string) => number;
     onEditItem: (item: MenuItem) => void;
     onDeleteItem: (itemId: string) => void;
   },
@@ -74,15 +76,22 @@ export function renderMenuItemCard(
     article.classList.add("item-card--compact");
   }
 
-  const addButton = document.createElement("button");
-  addButton.className = "add-button";
-  addButton.type = "button";
-  addButton.textContent = "+";
-  addButton.setAttribute("aria-label", `Add ${item.name_zh}`);
-  addButton.addEventListener("click", () => actions.onAddToCart(item));
-
   const actionColumn = document.createElement("div");
   actionColumn.className = "item-card__actions";
+  actionColumn.append(renderOrderControl(item, actions));
+
+  const moreButton = document.createElement("button");
+  moreButton.className = "item-more-button";
+  moreButton.type = "button";
+  moreButton.textContent = "⋯";
+  moreButton.title = "Menu item actions";
+  moreButton.setAttribute("aria-label", `Show actions for ${item.name_zh}`);
+  moreButton.setAttribute("aria-expanded", "false");
+  moreButton.addEventListener("click", () => {
+    const isOpen = article.classList.toggle("item-card--utilities-open");
+    moreButton.setAttribute("aria-expanded", String(isOpen));
+  });
+  actionColumn.append(moreButton);
 
   const editButton = document.createElement("button");
   editButton.className = "item-edit-button";
@@ -98,9 +107,73 @@ export function renderMenuItemCard(
   deleteButton.setAttribute("aria-label", `Delete ${item.name_zh}`);
   deleteButton.addEventListener("click", () => actions.onDeleteItem(item.item_id));
 
-  actionColumn.append(addButton, editButton, deleteButton);
+  const utilityActions = document.createElement("div");
+  utilityActions.className = "item-card__utility-actions";
+  utilityActions.append(editButton, deleteButton);
+  content.append(utilityActions);
+
   article.append(content, actionColumn);
   return article;
+}
+
+function renderOrderControl(
+  item: MenuItem,
+  actions: {
+    onAddToCart: (item: MenuItem) => void;
+    onDecreaseCartItem: (itemId: string) => void;
+    getCartQuantity: (itemId: string) => number;
+  },
+): HTMLElement {
+  const control = document.createElement("div");
+  control.className = "item-order-control";
+
+  const refresh = (): void => {
+    const quantity = actions.getCartQuantity(item.item_id);
+    control.classList.toggle("item-order-control--selected", quantity > 0);
+
+    if (quantity === 0) {
+      const addButton = document.createElement("button");
+      addButton.className = "add-button";
+      addButton.type = "button";
+      addButton.textContent = "+";
+      addButton.setAttribute("aria-label", `Add ${item.name_zh}`);
+      addButton.addEventListener("click", () => {
+        actions.onAddToCart(item);
+        refresh();
+      });
+      control.replaceChildren(addButton);
+      return;
+    }
+
+    const decreaseButton = renderQuantityButton("-", `Decrease ${item.name_zh}`, () => {
+      actions.onDecreaseCartItem(item.item_id);
+      refresh();
+    });
+    const quantityLabel = document.createElement("span");
+    quantityLabel.className = "item-order-control__quantity";
+    quantityLabel.textContent = String(quantity);
+    quantityLabel.setAttribute("aria-label", `${quantity} selected`);
+    const increaseButton = renderQuantityButton("+", `Add another ${item.name_zh}`, () => {
+      actions.onAddToCart(item);
+      refresh();
+    });
+
+    control.replaceChildren(decreaseButton, quantityLabel, increaseButton);
+  };
+
+  control.addEventListener("cart-sync", refresh);
+  refresh();
+  return control;
+}
+
+function renderQuantityButton(label: string, ariaLabel: string, onClick: () => void): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.className = "item-order-control__button";
+  button.type = "button";
+  button.textContent = label;
+  button.setAttribute("aria-label", ariaLabel);
+  button.addEventListener("click", onClick);
+  return button;
 }
 
 function getDescriptionText(item: MenuItem): string | null {

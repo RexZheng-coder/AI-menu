@@ -5,6 +5,8 @@ export function renderMenuCategory(
   category: MenuCategory,
   actions: {
     onAddToCart: (item: MenuItem) => void;
+    onDecreaseCartItem: (itemId: string) => void;
+    getCartQuantity: (itemId: string) => number;
     onEditItem: (item: MenuItem) => void;
     onDeleteItem: (itemId: string) => void;
     onAddItem: (categoryId: string) => void;
@@ -12,6 +14,8 @@ export function renderMenuCategory(
 ): HTMLElement {
   const section = document.createElement("section");
   section.className = "category-section";
+  section.id = `category-${category.category_id}`;
+  section.dataset.categoryId = category.category_id;
   section.setAttribute("aria-labelledby", `${category.category_id}-title`);
 
   const headingGroup = document.createElement("div");
@@ -24,12 +28,13 @@ export function renderMenuCategory(
 
   const subtitle = document.createElement("p");
   subtitle.className = "category-section__subtitle";
-  subtitle.textContent = category.name_en;
+  subtitle.textContent = `${category.name_en} · ${category.items.length} ${category.items.length === 1 ? "item" : "items"}`;
 
   const addItemButton = document.createElement("button");
   addItemButton.className = "category-add-item-button";
   addItemButton.type = "button";
-  addItemButton.textContent = "Add item";
+  addItemButton.textContent = "+";
+  addItemButton.title = "Add a menu item";
   addItemButton.setAttribute("aria-label", `Add item to ${category.name_zh || category.name_en}`);
   addItemButton.addEventListener("click", () => actions.onAddItem(category.category_id));
 

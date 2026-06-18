@@ -64,16 +64,21 @@ let editingCategoryId: string | null = null;
 let isAddingItem = false;
 let summaryLanguage: SummaryLanguageMode = "bilingual";
 let copyStatus: string | null = null;
+let disposeMenuNavigation: (() => void) | null = null;
 
 renderApp(appRootElement);
 
 function renderApp(root: HTMLElement): void {
-  root.replaceChildren(renderUpload(), renderHistory());
+  disposeMenuNavigation?.();
+  disposeMenuNavigation = null;
+  root.replaceChildren(renderUpload());
   cartPanelRoot = null;
 
   if (currentMenu) {
     root.append(renderMenuPage(currentMenu));
     renderCart();
+  } else {
+    root.append(renderHistory());
   }
 }
 
@@ -110,14 +115,17 @@ function renderMenuPage(menu: Menu): HTMLElement {
   menuColumn.append(
     renderHeader(menu),
     renderQualityAndSourcePanel(menu),
-    renderCategoryNav(menu),
-    renderCategoryList(menu),
+    renderMenuBrowser(menu),
   );
 
   cartPanelRoot = document.createElement("div");
   cartPanelRoot.className = "cart-column";
 
   shell.append(menuColumn, cartPanelRoot);
+
+  window.requestAnimationFrame(() => {
+    disposeMenuNavigation = initializeMenuNavigation(shell, menu);
+  });
 
   if (editingItemId || isAddingItem) {
     shell.append(renderEditDialog(menu));
@@ -229,17 +237,39 @@ function renderStat(value: string, label: string): HTMLElement {
   return stat;
 }
 
+function renderMenuBrowser(menu: Menu): HTMLElement {
+  const browser = document.createElement("div");
+  browser.className = "menu-browser";
+  browser.append(renderCategoryNav(menu), renderCategoryList(menu));
+  return browser;
+}
+
 function renderCategoryNav(menu: Menu): HTMLElement {
   const nav = document.createElement("nav");
   nav.className = "category-nav";
   nav.setAttribute("aria-label", "Menu categories");
 
-  for (const category of menu.categories) {
-    const link = document.createElement("a");
-    link.className = "category-nav__link";
-    link.href = `#${category.category_id}-title`;
-    link.textContent = category.name_zh || category.name_en;
-    nav.append(link);
+  for (const [index, category] of menu.categories.entries()) {
+    const button = document.createElement("button");
+    button.className = `category-nav__link${index === 0 ? " category-nav__link--active" : ""}`;
+    button.type = "button";
+    button.dataset.categoryId = category.category_id;
+    button.setAttribute("aria-current", index === 0 ? "true" : "false");
+
+    const nameZh = document.createElement("span");
+    nameZh.className = "category-nav__name-zh";
+    nameZh.textContent = category.name_zh || category.name_en;
+
+    const nameEn = document.createElement("span");
+    nameEn.className = "category-nav__name-en";
+    nameEn.textContent = category.name_en;
+
+    const itemCount = document.createElement("span");
+    itemCount.className = "category-nav__count";
+    itemCount.textContent = String(category.items.length);
+
+    button.append(nameZh, nameEn, itemCount);
+    nav.append(button);
   }
 
   return nav;
@@ -259,6 +289,8 @@ function renderCategoryList(menu: Menu): HTMLElement {
     container.append(
       renderMenuCategory(category, {
         onAddToCart: addToCart,
+        onDecreaseCartItem: decreaseCartItem,
+        getCartQuantity,
         onEditItem: startEditingItem,
         onDeleteItem: deleteMenuItem,
         onAddItem: startAddingItem,
@@ -267,6 +299,121 @@ function renderCategoryList(menu: Menu): HTMLElement {
   }
 
   return container;
+}
+
+function initializeMenuNavigation(shell: HTMLElement, menu: Menu): () => void {
+  const navButtons = Array.from(shell.querySelectorAll<HTMLButtonElement>(".category-nav__link"));
+  const sections = Array.from(shell.querySelectorAll<HTMLElement>(".category-section"));
+  const menuPage = shell.querySelector<HTMLElement>(".menu-page");
+
+  if (navButtons.length === 0 || sections.length === 0 || !menuPage) {
+    return () => undefined;
+  }
+
+  let activeCategoryId = menu.categories[0]?.category_id ?? "";
+  let scrollFrame = 0;
+  let touchStartX = 0;
+  let touchStartY = 0;
+
+  const setActiveCategory = (categoryId: string): void => {
+    if (!categoryId || activeCategoryId === categoryId) {
+      return;
+    }
+
+    activeCategoryId = categoryId;
+
+    for (const button of navButtons) {
+      const isActive = button.dataset.categoryId === categoryId;
+      button.classList.toggle("category-nav__link--active", isActive);
+      button.setAttribute("aria-current", String(isActive));
+
+      if (isActive) {
+        button.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+      }
+    }
+  };
+
+  const scrollToCategory = (categoryId: string): void => {
+    const section = sections.find((candidate) => candidate.dataset.categoryId === categoryId);
+
+    if (!section) {
+      return;
+    }
+
+    setActiveCategory(categoryId);
+    section.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const updateActiveCategory = (): void => {
+    scrollFrame = 0;
+    const activationLine = Math.min(window.innerHeight * 0.45, 320);
+    let closestSection = sections[0];
+
+    for (const section of sections) {
+      if (section.getBoundingClientRect().top <= activationLine) {
+        closestSection = section;
+      } else {
+        break;
+      }
+    }
+
+    setActiveCategory(closestSection.dataset.categoryId ?? "");
+  };
+
+  const onScroll = (): void => {
+    if (scrollFrame === 0) {
+      scrollFrame = window.requestAnimationFrame(updateActiveCategory);
+    }
+  };
+
+  const onTouchStart = (event: TouchEvent): void => {
+    const touch = event.changedTouches[0];
+    touchStartX = touch.clientX;
+    touchStartY = touch.clientY;
+  };
+
+  const onTouchEnd = (event: TouchEvent): void => {
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - touchStartX;
+    const deltaY = touch.clientY - touchStartY;
+
+    if (Math.abs(deltaX) < 72 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.35) {
+      return;
+    }
+
+    const currentIndex = menu.categories.findIndex((category) => category.category_id === activeCategoryId);
+    const nextIndex = Math.max(
+      0,
+      Math.min(menu.categories.length - 1, currentIndex + (deltaX < 0 ? 1 : -1)),
+    );
+    const nextCategory = menu.categories[nextIndex];
+
+    if (nextCategory && nextIndex !== currentIndex) {
+      scrollToCategory(nextCategory.category_id);
+    }
+  };
+
+  const buttonHandlers = navButtons.map((button) => {
+    const handler = (): void => scrollToCategory(button.dataset.categoryId ?? "");
+    button.addEventListener("click", handler);
+    return { button, handler };
+  });
+
+  window.addEventListener("scroll", onScroll, { passive: true });
+  menuPage.addEventListener("touchstart", onTouchStart, { passive: true });
+  menuPage.addEventListener("touchend", onTouchEnd, { passive: true });
+  updateActiveCategory();
+
+  return () => {
+    window.removeEventListener("scroll", onScroll);
+    menuPage.removeEventListener("touchstart", onTouchStart);
+    menuPage.removeEventListener("touchend", onTouchEnd);
+    buttonHandlers.forEach(({ button, handler }) => button.removeEventListener("click", handler));
+
+    if (scrollFrame !== 0) {
+      window.cancelAnimationFrame(scrollFrame);
+    }
+  };
 }
 
 function renderOriginalImageDialog(): HTMLElement {
@@ -752,6 +899,10 @@ function addToCart(item: MenuItem): void {
   renderCart();
 }
 
+function getCartQuantity(itemId: string): number {
+  return cartItems.find((item) => item.item_id === itemId)?.quantity ?? 0;
+}
+
 function increaseCartItem(itemId: string): void {
   cartItems = cartItems.map((item) =>
     item.item_id === itemId ? updateCartItemQuantity(item, item.quantity + 1) : item,
@@ -820,6 +971,13 @@ function renderCart(): void {
       onCopySummary: copySummaryText,
     }),
   );
+  syncMenuCardQuantities();
+}
+
+function syncMenuCardQuantities(): void {
+  for (const control of appRootElement.querySelectorAll<HTMLElement>(".item-order-control")) {
+    control.dispatchEvent(new Event("cart-sync"));
+  }
 }
 
 function changeSummaryLanguage(mode: SummaryLanguageMode): void {

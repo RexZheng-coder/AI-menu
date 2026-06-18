@@ -18,7 +18,13 @@ type UploadPanelProps = {
 
 export function renderUploadPanel(props: UploadPanelProps): HTMLElement {
   const section = document.createElement("section");
-  section.className = props.hasMenu ? "upload-panel upload-panel--compact" : "upload-panel";
+  section.className = [
+    "upload-panel",
+    props.hasMenu ? "upload-panel--compact" : "",
+    props.files.length > 0 || props.error || isBusy(props.parseState) ? "upload-panel--has-files" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   section.setAttribute("aria-label", "Upload menu images");
 
   const copy = document.createElement("div");
