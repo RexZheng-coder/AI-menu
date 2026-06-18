@@ -56,7 +56,6 @@ type ParseAttemptResult = {
 
 type RetryKind = "dense_fallback" | "low_count";
 
-const perImageParseTimeoutMs = 30_000;
 const maxMiMoRequestTimeoutMs = 55_000;
 
 let lastMiMoMenuParseDiagnostics: MiMoMenuParseDiagnostics | null = null;
@@ -71,7 +70,7 @@ export async function parseMenuWithMiMo(
     throw new MiMoParserError("MIMO_PARSE_FAILED", "No menu images were provided.");
   }
 
-  const detailConfig = createDetailConfig(images.length);
+  const detailConfig = createDetailConfig();
   const config = createMiMoConfig({
     ...options,
     timeoutMs: options.timeoutMs ?? detailConfig.timeoutMs,
@@ -330,16 +329,15 @@ function assertExtractionHasItems(extraction: LightweightMenuExtraction): void {
   }
 }
 
-function createDetailConfig(imageCount: number): DetailConfig {
+function createDetailConfig(): DetailConfig {
   const detail = readParseDetail();
-  const imageBasedTimeoutMs = calculateImageBasedTimeoutMs(imageCount);
 
   if (detail === "fast") {
     return {
       detail,
       userPrompt: MENU_SINGLE_PASS_FAST_PROMPT,
       maxCompletionTokens: 3000,
-      timeoutMs: Math.min(45_000, imageBasedTimeoutMs),
+      timeoutMs: maxMiMoRequestTimeoutMs,
       lowItemRetryThreshold: 12,
     };
   }
@@ -349,7 +347,7 @@ function createDetailConfig(imageCount: number): DetailConfig {
       detail,
       userPrompt: MENU_SINGLE_PASS_BALANCED_PROMPT,
       maxCompletionTokens: 3800,
-      timeoutMs: Math.min(50_000, imageBasedTimeoutMs),
+      timeoutMs: maxMiMoRequestTimeoutMs,
       lowItemRetryThreshold: 15,
     };
   }
@@ -358,13 +356,9 @@ function createDetailConfig(imageCount: number): DetailConfig {
     detail,
     userPrompt: MENU_SINGLE_PASS_ACCURATE_RUNTIME_PROMPT,
     maxCompletionTokens: 4200,
-    timeoutMs: Math.min(maxMiMoRequestTimeoutMs, imageBasedTimeoutMs),
+    timeoutMs: maxMiMoRequestTimeoutMs,
     lowItemRetryThreshold: 15,
   };
-}
-
-function calculateImageBasedTimeoutMs(imageCount: number): number {
-  return Math.min(maxMiMoRequestTimeoutMs, Math.max(1, imageCount) * perImageParseTimeoutMs);
 }
 
 function readParseDetail(): MenuParseDetail {

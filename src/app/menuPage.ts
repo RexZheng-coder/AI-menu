@@ -38,9 +38,7 @@ const cartId = "cart_lantern_house_001";
 const maxUploadSizeBytes = 10 * 1024 * 1024;
 const acceptedImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const acceptedImageExtensions = [".jpg", ".jpeg", ".png", ".webp"];
-const defaultParseTimeoutMs = 60_000;
-const parseTimeoutMsPerImage = 30_000;
-const parseTimeoutNetworkBufferMs = 5_000;
+const defaultParseTimeoutMs = 62_000;
 
 type UploadPreview = {
   file: File;
@@ -476,7 +474,7 @@ async function analyzeUploadedMenu(): Promise<void> {
     renderApp(appRootElement);
     const parsedMenu = await withParseTimeout(
       parseMenuImages(uploadFiles.map((filePreview) => filePreview.file)),
-      getParseTimeoutMs(uploadFiles.length),
+      getParseTimeoutMs(),
     );
     setCurrentMenu(parsedMenu, {
       quality: getLastClientParseMetadata(),
@@ -949,7 +947,7 @@ function withParseTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T>
   });
 }
 
-function getParseTimeoutMs(imageCount: number): number {
+function getParseTimeoutMs(): number {
   const params = new URLSearchParams(window.location.search);
   const timeoutMs = Number(params.get("parseTimeoutMs"));
 
@@ -957,10 +955,7 @@ function getParseTimeoutMs(imageCount: number): number {
     return timeoutMs;
   }
 
-  return Math.min(
-    defaultParseTimeoutMs,
-    Math.max(1, imageCount) * parseTimeoutMsPerImage + parseTimeoutNetworkBufferMs,
-  );
+  return defaultParseTimeoutMs;
 }
 
 function isRealParseMode(): boolean {
