@@ -1,15 +1,12 @@
-type UploadPreview = {
-  file: File;
-  previewUrl: string;
-};
+import type { PreparedMenuImage } from "../lib/clientImageCompression.js";
 
 type UploadPanelProps = {
-  files: UploadPreview[];
+  files: PreparedMenuImage[];
   error: string | null;
   parseState: "idle" | "validating_files" | "uploading" | "parsing" | "success" | "error";
   hasMenu: boolean;
   isRealMode: boolean;
-  onFilesSelected: (files: File[]) => void;
+  onFilesSelected: (files: File[]) => void | Promise<void>;
   onClearFiles: () => void;
   onAnalyze: () => void;
   onRetry: () => void;
@@ -41,7 +38,7 @@ export function renderUploadPanel(props: UploadPanelProps): HTMLElement {
   const description = document.createElement("p");
   description.className = "upload-panel__description";
   description.textContent = props.isRealMode
-    ? "Choose JPG, PNG, or WebP menu images. Real AI parsing runs through the secure local API route."
+    ? "Choose JPG, PNG, or WebP menu images. Large photos are optimized in your browser before secure upload."
     : "Choose JPG, PNG, or WebP menu images. Mock mode returns the sample parsed menu for fast UI testing.";
 
   const modeLabel = document.createElement("p");
@@ -67,7 +64,7 @@ export function renderUploadPanel(props: UploadPanelProps): HTMLElement {
     "Avoid glare and shadows",
     "Keep the menu flat",
     "Crop unrelated background",
-    "Upload one menu page at a time",
+    "Upload one or two menu pages at a time",
   ]) {
     const item = document.createElement("li");
     item.textContent = tip;
@@ -100,7 +97,7 @@ export function renderUploadPanel(props: UploadPanelProps): HTMLElement {
   input.multiple = true;
   input.disabled = isBusy(props.parseState);
   input.addEventListener("change", () => {
-    props.onFilesSelected(Array.from(input.files ?? []));
+    void props.onFilesSelected(Array.from(input.files ?? []));
     input.value = "";
   });
 
@@ -212,7 +209,7 @@ function getAnalyzeButtonText(parseState: UploadPanelProps["parseState"]): strin
 function getParseStatusText(parseState: UploadPanelProps["parseState"]): string {
   switch (parseState) {
     case "validating_files":
-      return "Checking selected images...";
+      return "Optimizing selected images for upload...";
     case "uploading":
       return "Uploading images...";
     case "parsing":
@@ -226,7 +223,7 @@ function getParseStatusText(parseState: UploadPanelProps["parseState"]): string 
   }
 }
 
-function renderSelectedFiles(files: UploadPreview[]): HTMLElement {
+function renderSelectedFiles(files: PreparedMenuImage[]): HTMLElement {
   const container = document.createElement("div");
   container.className = "upload-preview-list";
 
@@ -245,7 +242,7 @@ function renderSelectedFiles(files: UploadPreview[]): HTMLElement {
   return container;
 }
 
-function renderSelectedFile(filePreview: UploadPreview): HTMLElement {
+function renderSelectedFile(filePreview: PreparedMenuImage): HTMLElement {
   const item = document.createElement("article");
   item.className = "upload-preview";
 
@@ -259,11 +256,13 @@ function renderSelectedFile(filePreview: UploadPreview): HTMLElement {
 
   const name = document.createElement("p");
   name.className = "upload-preview__name";
-  name.textContent = filePreview.file.name;
+  name.textContent = filePreview.originalFile.name;
 
   const size = document.createElement("p");
   size.className = "upload-preview__size";
-  size.textContent = formatFileSize(filePreview.file.size);
+  size.textContent = filePreview.wasCompressed
+    ? `${formatFileSize(filePreview.originalByteLength)} → ${formatFileSize(filePreview.uploadByteLength)} optimized`
+    : `${formatFileSize(filePreview.uploadByteLength)} ready to upload`;
 
   meta.append(name, size);
   item.append(image, meta);
@@ -271,6 +270,10 @@ function renderSelectedFile(filePreview: UploadPreview): HTMLElement {
 }
 
 function formatFileSize(bytes: number): string {
+  if (bytes < 1024 * 1024) {
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  }
+
   const megabytes = bytes / 1024 / 1024;
-  return `${megabytes.toFixed(megabytes >= 1 ? 1 : 2)} MB`;
+  return `${megabytes.toFixed(1)} MB`;
 }

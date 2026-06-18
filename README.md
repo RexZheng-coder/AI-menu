@@ -35,6 +35,7 @@ Route modes:
 - Bilingual/English/Chinese order summary modes with copy support
 - Local recent menu history using `localStorage`
 - Friendly parse errors, retry actions, timeout handling, and empty-menu validation
+- Browser-side image optimization for large menu photos before Vercel upload
 - Static deployment support for Vercel and Netlify
 
 ## Tech Stack

@@ -24,6 +24,11 @@ import {
   type ClientParseMetadata,
 } from "../lib/parseMenuImages.js";
 import { inferCurrencyFromPriceText, parsePriceAmount } from "../lib/priceUtils.js";
+import {
+  prepareMenuImages,
+  revokePreparedMenuImages,
+  type PreparedMenuImage,
+} from "../lib/clientImageCompression.js";
 import { mockMenu } from "../mock/menuMock.js";
 import type { Cart, CartItem, Menu, MenuItem, OrderSummary } from "../types/menu.js";
 
@@ -35,12 +40,13 @@ if (!appRoot) {
 
 const appRootElement = appRoot;
 const cartId = "cart_lantern_house_001";
-const maxUploadSizeBytes = 10 * 1024 * 1024;
+const maxOriginalImageSizeBytes = 25 * 1024 * 1024;
+const maxUploadImageCount = 2;
 const acceptedImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const acceptedImageExtensions = [".jpg", ".jpeg", ".png", ".webp"];
 const defaultParseTimeoutMs = 62_000;
 
-type UploadPreview = {
+type OriginalImagePreview = {
   file: File;
   previewUrl: string;
 };
@@ -48,7 +54,7 @@ type UploadPreview = {
 type ParseState = "idle" | "validating_files" | "uploading" | "parsing" | "success" | "error";
 
 let currentMenu: Menu | null = null;
-let uploadFiles: UploadPreview[] = [];
+let uploadFiles: PreparedMenuImage[] = [];
 let uploadError: ParseMenuError | null = null;
 let parseState: ParseState = "idle";
 let savedMenus: SavedMenuRecord[] = getSavedMenus();
@@ -57,7 +63,7 @@ let orderSummary: OrderSummary | null = null;
 let cartPanelRoot: HTMLElement | null = null;
 let isCartOpen = false;
 let parseQuality: ClientParseMetadata | null = null;
-let currentOriginalImages: UploadPreview[] = [];
+let currentOriginalImages: OriginalImagePreview[] = [];
 let isOriginalImageOpen = false;
 let editingItemId: string | null = null;
 let editingCategoryId: string | null = null;
@@ -574,22 +580,39 @@ function renderEmptyState(message: string): HTMLElement {
   return emptyState;
 }
 
-function selectUploadFiles(files: File[]): void {
+async function selectUploadFiles(files: File[]): Promise<void> {
   parseState = "validating_files";
   uploadError = null;
   renderApp(appRootElement);
 
-  window.setTimeout(() => {
-    const validation = validateUploadFiles(files);
+  const validation = validateUploadFiles(files);
 
-    if (validation.validFiles.length > 0) {
-      replaceUploadFiles(validation.validFiles);
-    }
-
+  if (validation.error || validation.validFiles.length === 0) {
+    replaceUploadFiles([]);
     uploadError = validation.error;
-    parseState = validation.error ? "error" : "idle";
+    parseState = "error";
     renderApp(appRootElement);
-  }, 0);
+    return;
+  }
+
+  try {
+    const preparedImages = await prepareMenuImages(validation.validFiles);
+    replaceUploadFiles(preparedImages);
+    uploadError = null;
+    parseState = "idle";
+  } catch (error) {
+    replaceUploadFiles([]);
+    uploadError = new ParseMenuError(
+      "file_too_large",
+      error instanceof Error
+        ? error.message
+        : "The selected images could not be optimized for upload.",
+      { cause: error },
+    );
+    parseState = "error";
+  } finally {
+    renderApp(appRootElement);
+  }
 }
 
 function clearUploadFiles(): void {
@@ -620,7 +643,7 @@ async function analyzeUploadedMenu(): Promise<void> {
     parseState = "parsing";
     renderApp(appRootElement);
     const parsedMenu = await withParseTimeout(
-      parseMenuImages(uploadFiles.map((filePreview) => filePreview.file)),
+      parseMenuImages(uploadFiles.map((filePreview) => filePreview.uploadFile)),
       getParseTimeoutMs(),
     );
     setCurrentMenu(parsedMenu, {
@@ -799,7 +822,7 @@ function setCurrentMenu(
   menu: Menu,
   options: {
     quality?: ClientParseMetadata | null;
-    originalImages?: UploadPreview[];
+    originalImages?: OriginalImagePreview[];
   } = {},
 ): void {
   revokeOriginalPreviews();
@@ -817,18 +840,13 @@ function setCurrentMenu(
   copyStatus = null;
 }
 
-function replaceUploadFiles(files: File[]): void {
+function replaceUploadFiles(files: PreparedMenuImage[]): void {
   revokeUploadPreviews();
-  uploadFiles = files.map((file) => ({
-    file,
-    previewUrl: URL.createObjectURL(file),
-  }));
+  uploadFiles = files;
 }
 
 function revokeUploadPreviews(): void {
-  for (const filePreview of uploadFiles) {
-    URL.revokeObjectURL(filePreview.previewUrl);
-  }
+  revokePreparedMenuImages(uploadFiles);
 }
 
 function validateUploadFiles(files: File[]): { validFiles: File[]; error: ParseMenuError | null } {
@@ -840,9 +858,9 @@ function validateUploadFiles(files: File[]): { validFiles: File[]; error: ParseM
   }
 
   const invalidFiles = files.filter((file) => !isAcceptedImageFile(file));
-  const oversizedFiles = files.filter((file) => file.size > maxUploadSizeBytes);
+  const oversizedFiles = files.filter((file) => file.size > maxOriginalImageSizeBytes);
   const validFiles = files.filter(
-    (file) => isAcceptedImageFile(file) && file.size <= maxUploadSizeBytes,
+    (file) => isAcceptedImageFile(file) && file.size <= maxOriginalImageSizeBytes,
   );
 
   if (invalidFiles.length > 0) {
@@ -855,12 +873,22 @@ function validateUploadFiles(files: File[]): { validFiles: File[]; error: ParseM
     };
   }
 
+  if (files.length > maxUploadImageCount) {
+    return {
+      validFiles: [],
+      error: new ParseMenuError(
+        "invalid_request",
+        `Choose up to ${maxUploadImageCount} menu images at a time so they stay within the secure upload limit.`,
+      ),
+    };
+  }
+
   if (oversizedFiles.length > 0) {
     return {
       validFiles,
       error: new ParseMenuError(
         "file_too_large",
-        `Each image must be 10MB or smaller. Rejected: ${formatFileNames(oversizedFiles)}.`,
+        `Each original image must be 25MB or smaller. Rejected: ${formatFileNames(oversizedFiles)}.`,
       ),
     };
   }
@@ -1125,10 +1153,10 @@ function logParseError(error: ParseMenuError): void {
   console.error(`[menu-parse:${error.code}] ${error.userMessage}`, error.cause ?? error);
 }
 
-function cloneUploadPreviews(files: UploadPreview[]): UploadPreview[] {
+function cloneUploadPreviews(files: PreparedMenuImage[]): OriginalImagePreview[] {
   return files.map((filePreview) => ({
-    file: filePreview.file,
-    previewUrl: URL.createObjectURL(filePreview.file),
+    file: filePreview.originalFile,
+    previewUrl: URL.createObjectURL(filePreview.originalFile),
   }));
 }
 

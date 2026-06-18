@@ -285,6 +285,10 @@ button:disabled {
   font-weight: 700;
 }
 
+.upload-preview__size strong {
+  color: #236f5d;
+}
+
 .upload-empty,
 .upload-error {
   margin: 0;

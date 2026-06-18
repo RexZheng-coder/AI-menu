@@ -100,7 +100,9 @@ Real parsing sends uploaded images to MiMo and may incur provider cost. Use non-
 
 ## Real MiMo Parser
 
-The Vercel route `POST /api/menus/parse` accepts multipart image uploads from the `images` field. During debugging it also accepts `files` as a temporary compatibility field. It rejects non-image files, enforces the same 10MB per-file limit as the frontend, converts images to data URLs, calls MiMo server-side, and sanitizes the model output into the app's `Menu` type.
+The browser accepts JPG, PNG, and WebP source images up to 25MB each, then creates temporary upload copies before calling the API. Large photos are resized to at most 2200px on the longest side and adaptively encoded as JPEG, targeting about 900KB per image and no more than roughly 3.4MB for the complete multipart request. The original file stays in the browser for preview/comparison and is not uploaded or stored by the app.
+
+The Vercel route `POST /api/menus/parse` accepts these optimized multipart uploads from the `images` field. During debugging it also accepts `files` as a temporary compatibility field. It rejects non-image files, retains a defensive 10MB per-file limit, converts images to data URLs, calls MiMo server-side, and sanitizes the model output into the app's `Menu` type.
 
 API keys must stay server-side only in `MIMO_API_KEY`. Real image parsing requires a MiMo model that supports image understanding; the default is `mimo-v2.5`. Mock mode is still available explicitly with `?parse=mock`.
 
@@ -111,6 +113,8 @@ Real parsing defaults to `MENU_AI_PROVIDER=mimo`, `MENU_PARSE_STRATEGY=vision`, 
 DeepSeek is not used for vision parsing because the current DeepSeek API/model rejected OpenAI-style `image_url` input in diagnostics.
 
 The route processes only the first `MAX_PARSE_IMAGES` uploads, defaulting to 2, to keep latency and provider cost predictable. Server-side preprocessing logs original bytes, optimized bytes, and a SHA-256 hash prefix. If optional `sharp` is not available, preprocessing is a safe no-op fallback.
+
+Client-side compression is required because Vercel applies its Function request-body limit before server-side code can run. Server-side `sharp` preprocessing remains a second defensive optimization, not the primary solution for oversized uploads.
 
 The parser is implemented as a Vercel Node.js Serverless Function, not an Edge Function. `vercel.json` sets `/api/menus/parse` to a 60-second maximum duration. Direct MiMo requests may run for up to 55 seconds regardless of image count. The route keeps the final few seconds for validation and a structured JSON response before Vercel stops the function; the browser waits slightly longer so it can display that backend error instead of masking it with a client timeout:
 

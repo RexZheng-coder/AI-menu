@@ -40,8 +40,10 @@ Open `http://127.0.0.1:4173/` for real mode when a Vercel API route is available
 
 ## Too-Large Image
 
-1. Upload an image larger than 10MB.
-2. Confirm the app rejects it and shows the file-size message.
+1. Upload a JPG, PNG, or WebP image between 5MB and 25MB.
+2. Confirm the app shows the original size, optimized upload size, and enables scanning.
+3. Confirm the optimized image is below the Vercel-safe request budget and the scan reaches the backend.
+4. Upload an image larger than 25MB and confirm the app rejects it with the source-image size message.
 
 ## Parse Timeout
 
