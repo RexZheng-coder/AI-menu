@@ -42,7 +42,7 @@ Accuracy-first rules:
 5. Put the original visible item name in name_en exactly as shown when possible, even if it is not English.
 6. Extract prices exactly as shown in price_raw. If the menu clearly uses one currency symbol, include that symbol with every price when it is visible or clearly implied by the menu.
 7. If a price is unclear or not visible, use null.
-8. Translate item names into concise, natural, easy-to-understand Simplified Chinese (简体中文). CRITICAL: never translate by sound (phonetic transliteration). Always translate by what the dish is made of — use the main ingredient, cooking method, or dish type. For example: "Falafel" is "鹰嘴豆饼" (chickpea patty), not "法拉费"; "Tortellini" is "意式肉饺", not "托尔特利尼".
+8. Translate item names into concise, natural, easy-to-understand Simplified Chinese (简体中文). CRITICAL: before writing any Chinese name, ask yourself "what is the main ingredient or cooking method?" Never use sound-alike Chinese characters. For example: "Falafel" is chickpea patties → "鹰嘴豆饼", not "法拉费"; "Tortellini" is stuffed pasta → "意式肉饺", not "托尔特利尼".
 9. Translate descriptions into Simplified Chinese only if visible and short enough. Otherwise use null.
 10. Generate short useful tags only when supported by the item name or visible description.
 11. Estimate spicy_level from the item name and visible description on a 0–5 scale: 0 = not spicy or unknown, 1 = hint of heat, 2 = mild, 3 = medium, 4 = hot, 5 = very hot.
@@ -53,10 +53,10 @@ Accuracy-first rules:
 Translation guidance:
 - Every Chinese field, including category name_zh, item name_zh, description_zh, and tags_zh, must use Simplified Chinese characters. Never use Traditional Chinese.
 - Write for mainland Chinese diners using familiar, direct food terminology.
-- Never use phonetic/sound-alike transliteration. Always translate by the ingredient, cooking method, or dish type. For example: "Falafel" is "鹰嘴豆饼", not "法拉费".
-- For example, translate "NDUJA, SPIANATA & GORGONZOLA" as "意式辣肉酱香肠、意式萨拉米、戈贡佐拉蓝纹奶酪", not as opaque phonetic names.
+- CRITICAL: Before translating any food name, identify its main ingredient or cooking method first. Never use sound-alike Chinese characters (phonetic transliteration). For example: "Falafel" = chickpea patty → "鹰嘴豆饼", not "法拉费"; "Tortellini" = stuffed pasta → "意式肉饺", not "托尔特利尼".
+- For example, translate "NDUJA, SPIANATA & GORGONZOLA" as "意式辣肉酱、意式萨拉米、蓝纹奶酪", not as opaque phonetic names.
 - Translate "MARINARA" pizza as "番茄蒜香披萨" or similar; do not confuse it with "MARGHERITA".
-- For Italian cured meats, cheeses, sauces, pasta shapes, French sauces, Spanish dishes, or Japanese/Korean/Chinese terms, explain the ingredient or dish type in natural Chinese, never use Cantonese or Wu-style phonetic transliteration.
+- For Italian cured meats, cheeses, sauces, pasta shapes, French sauces, Spanish dishes, or Japanese/Korean/Chinese terms, explain the ingredient or dish type in natural Chinese.
 
 Priority order if the menu is dense:
 1. item name_en
@@ -105,13 +105,15 @@ Accuracy-first means complete item coverage:
 - Translate visible ingredient lines/descriptions into concise natural Simplified Chinese in description_zh.
 - For pizza, calzone, pasta, sandwiches, salads, and starters, ingredient lines are important and should not be dropped in accurate mode.
 - Translate every item and category name into concise natural Simplified Chinese.
-- CRITICAL: Never translate food names by sound (phonetic transliteration). Always translate by what the dish IS — its main ingredient, cooking method, or dish type. For example:
-  - "Falafel Bolognese" -> "鹰嘴豆饼肉酱", NOT "法拉费肉酱" (falafel is a chickpea patty, not a name to transliterate)
-  - "NDUJA, SPIANATA & GORGONZOLA" -> "意式辣肉酱香肠、意式萨拉米、戈贡佐拉蓝纹奶酪"
-  - "MARINARA" pizza -> "番茄蒜香披萨", not "玛格丽特披萨"
-  - "Tortellini" -> "意式肉饺", not "托尔特利尼"
-  - "Bruschetta" -> "意式烤面包", not "布鲁斯凯塔"
-  - "FOCACCIA" -> "意式香草面包", not "佛卡夏"
+- CRITICAL RULE — For every food name, ask yourself "what is the MAIN INGREDIENT or COOKING METHOD?" before translating. Never output a Chinese sound-alike (phonetic transliteration). Examples of the right approach:
+  - "Falafel Bolognese" = falafel is fried chickpea patties → "鹰嘴豆饼肉酱", never "法拉费肉酱"
+  - "Tortellini" = pasta stuffed with meat/cheese → "意式肉饺", never "托尔特利尼"
+  - "Bruschetta" = grilled bread with toppings → "意式烤面包", never "布鲁斯凯塔"
+  - "NDUJA" = spicy spreadable pork sausage → "意式辣肉酱", never "恩杜贾"
+  - "SPIANATA" = aged salami → "意式萨拉米", never "斯皮亚纳塔"
+  - "MARINARA" pizza = tomato garlic pizza → "番茄蒜香披萨", not "玛格丽特披萨"
+  - "FOCACCIA" = oven-baked herb bread → "意式香草面包", never "佛卡夏"
+  - "GORGONZOLA" = blue cheese → "蓝纹奶酪", never "戈贡佐拉"
 - Preserve visible or clearly implied currency symbols in price_raw when the menu uses one currency.
 - Guess spicy_level from the item name and visible ingredients on a 0–5 scale. Use 0 for no visible heat or unknown, 1 for a hint, 2 for mild, 3 for medium, 4 for hot, and 5 for very hot. Terms such as nduja, spicy, hot, arrabbiata, jalapeño, chili, pepper, buffalo, mala, curry, or similar names should influence the estimate.
 - Each item must include name_en, name_zh, description_en, description_zh, price_raw, spicy_level, and allergens.
@@ -132,7 +134,7 @@ export const MENU_SINGLE_PASS_FAST_PROMPT = `Read the menu image and return fina
 
 Extract all readable visible menu items in reading order. Do not summarize, sample, or intentionally skip clearly visible items.
 To stay compact, each item only needs name_en, name_zh, price_raw, spicy_level, and allergens. Omit other optional item fields so more items fit.
-Keep item names, prices, categories, Simplified Chinese item/category names, 0–5 spice estimates, and conservative allergen categories. All Chinese output must use Simplified Chinese, never Traditional Chinese. Preserve visible or clearly implied currency symbols in price_raw. Translate non-English culinary terms by meaning for Chinese diners instead of opaque phonetic transliteration. Use [] when no allergen is identifiable. Backend will default other missing optional fields.
+Keep item names, prices, categories, Simplified Chinese item/category names, 0–5 spice estimates, and conservative allergen categories. All Chinese output must use Simplified Chinese, never Traditional Chinese. Preserve visible or clearly implied currency symbols in price_raw. CRITICAL: before writing any Chinese name, identify the main ingredient or cooking method — never use sound-alike Chinese. Example: "Falafel" is chickpea patties → "鹰嘴豆饼", not "法拉费". Use [] when no allergen is identifiable. Backend will default other missing optional fields.
 
 Use name_en "Menu" and name_zh "菜单" if no category heading is visible.
 If the photo is too blurry or dark to read, return: {"quality_issue":"unreadable","restaurant_name":null,"cuisine_type":null,"categories":[]}.
@@ -159,7 +161,7 @@ Rules:
 - For each category include only name_en, name_zh, and items.
 - For each item include only name_en, name_zh, price_raw, spicy_level, and allergens.
 - Preserve price_raw exactly as shown. If the menu clearly uses one currency symbol, include that symbol with every price when visible or clearly implied.
-- Translate item and category names into concise, natural Simplified Chinese (简体中文). Never output Traditional Chinese. CRITICAL: never use phonetic transliteration — always translate by ingredient or dish type. For example "Falafel" is "鹰嘴豆饼", not "法拉费".
+- Translate item and category names into concise, natural Simplified Chinese (简体中文). Never output Traditional Chinese. CRITICAL: before writing any Chinese name, ask yourself what the dish IS made of — never use sound-alike Chinese characters. For example "Falafel" = chickpea patty → "鹰嘴豆饼", not "法拉费". "Tortellini" = stuffed pasta → "意式肉饺", not "托尔特利尼".
 - Use null for unclear or missing prices.
 - Use a 0–5 spicy_level and a conservative allergens array. Use [] if no allergen is identifiable.
 - Do not include descriptions, tags, confidence, markdown, comments, or explanations.
