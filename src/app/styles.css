@@ -878,6 +878,17 @@ button:disabled {
   color: #776d63;
 }
 
+.spice-meter__muted {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  gap: 6px;
+  color: #b5ada5;
+  font-size: 0.76rem;
+  font-weight: 800;
+  filter: grayscale(1) opacity(0.5);
+}
+
 .spice-meter__peppers {
   display: inline-flex;
   color: #b83d28;

@@ -247,8 +247,17 @@ function renderItemDetails(item: MenuItem, category: Pick<MenuCategory, "name_en
   spiceLabel.className = "spice-meter__label";
 
   if (item.spicy_level === 0) {
-    spiceLabel.textContent = "Not spicy";
-    details.append(spiceLabel);
+    spiceLabel.textContent = "Spice";
+
+    const peppers = document.createElement("span");
+    peppers.className = "spice-meter__peppers";
+    peppers.setAttribute("aria-hidden", "true");
+    peppers.textContent = "🌶";
+
+    const muted = document.createElement("span");
+    muted.className = "spice-meter__muted";
+    muted.append(spiceLabel, peppers);
+    details.append(muted);
     return details;
   }
 
