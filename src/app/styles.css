@@ -2360,6 +2360,18 @@ button:disabled {
   animation: panel-rise 220ms ease-out;
 }
 
+/* Press-down effect for all interactive elements */
+button:not(:disabled):active,
+.file-picker:active,
+.history-item__load:active {
+  transform: scale(0.96) !important;
+}
+button:not(:disabled),
+.file-picker,
+.history-item__load {
+  transition: transform 120ms ease, background-color 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
