@@ -7,6 +7,7 @@ import {
   serverHandlerTimeoutMs,
   serverFormDataTimeoutMs,
 } from "../../src/lib/menuConfig.js";
+import { checkRateLimit } from "../../src/lib/rateLimiter.js";
 
 declare const process:
   | {
@@ -39,7 +40,8 @@ type ApiErrorCode =
   | "SERVER_CONFIG"
   | "EMPTY_MENU"
   | "FORMDATA_TIMEOUT"
-  | "ROUTE_TIMEOUT";
+  | "ROUTE_TIMEOUT"
+  | "RATE_LIMITED";
 
 type ApiErrorBody = {
   ok: false;
@@ -103,6 +105,24 @@ export default async function handler(request: NodeRequest, response: NodeRespon
       responder.sendError("METHOD_NOT_ALLOWED", "Only POST requests are supported for menu parsing.", 405, {
         Allow: "POST",
       });
+      return;
+    }
+
+    const clientIp = getClientIp(request);
+    const rateLimit = await checkRateLimit(clientIp);
+
+    logInfo(logMeta, "rate_limit_checked", {
+      allowed: rateLimit.allowed,
+      dailyUsed: rateLimit.dailyUsed,
+      hourlyUsed: rateLimit.hourlyUsed,
+    });
+
+    if (!rateLimit.allowed) {
+      responder.sendError(
+        "RATE_LIMITED",
+        `Daily limit reached (${rateLimit.dailyUsed} scans today). Please try again tomorrow.`,
+        429,
+      );
       return;
     }
 
@@ -401,6 +421,15 @@ function getHeader(request: NodeRequest, name: string): string {
   return Array.isArray(value) ? value.join(", ") : value ?? "";
 }
 
+function getClientIp(request: NodeRequest): string {
+  return (
+    getHeader(request, "x-real-ip") ||
+    getHeader(request, "x-forwarded-for")?.split(",")[0]?.trim() ||
+    getHeader(request, "x-vercel-forwarded-for")?.split(",")[0]?.trim() ||
+    "unknown"
+  );
+}
+
 function readRequestBodyWithTimeout(
   request: NodeRequest,
   maxSizeBytes: number,
@@ -570,7 +599,7 @@ function getParserErrorMessage(code: ApiErrorCode, fallback: string): string {
 }
 
 function getParserErrorStatus(code: ApiErrorCode): number {
-  if (code === "MIMO_TIMEOUT") {
+  if (code === "MIMO_TIMEOUT" || code === "FORMDATA_TIMEOUT" || code === "ROUTE_TIMEOUT") {
     return 504;
   }
 

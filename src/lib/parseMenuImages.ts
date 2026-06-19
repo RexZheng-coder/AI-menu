@@ -138,7 +138,12 @@ async function parseBackendBatch(
           "missing_backend",
           "Real menu parsing is not available yet because the backend route is not configured.",
         )
-      : new ParseMenuError("unknown", "Menu parsing failed. Please try again.");
+      : response.status === 429
+        ? new ParseMenuError(
+            "rate_limited",
+            "RATE_LIMITED: Daily scan limit reached. Please try again tomorrow.",
+          )
+        : new ParseMenuError("unknown", "Menu parsing failed. Please try again.");
   }
 
   const body = await readJsonResponse(response);
@@ -338,6 +343,10 @@ function getBackendErrorCode(code: string | undefined, status: number): ParseMen
     return "invalid_request";
   }
 
+  if (code === "RATE_LIMITED") {
+    return "rate_limited";
+  }
+
   return "unknown";
 }
 
@@ -349,6 +358,8 @@ function formatBackendErrorMessage(code: string | undefined, message: string): s
       return "MIMO_TIMEOUT: This menu took too long to parse. Try cropping the image, uploading one page at a time, or retrying.";
     case "EMPTY_MENU_EXTRACTION":
       return "EMPTY_MENU_EXTRACTION: We could not find readable menu items. Try a clearer photo with less glare.";
+    case "RATE_LIMITED":
+      return "RATE_LIMITED: Daily scan limit reached. Please try again tomorrow.";
     case "AI_INVALID_JSON":
       return "AI_INVALID_JSON: The AI response was incomplete. Please retry.";
     case "MIMO_API_ERROR":

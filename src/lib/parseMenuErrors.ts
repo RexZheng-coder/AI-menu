@@ -14,6 +14,7 @@ export type ParseMenuErrorCode =
   | "mimo_timeout"
   | "mimo_api_error"
   | "unsupported_model"
+  | "rate_limited"
   | "unknown";
 
 export class ParseMenuError extends Error {
