@@ -4,6 +4,7 @@ Extract only visible information from the image.
 Do not invent dishes, prices, descriptions, ingredients, sections, or restaurant names.
 If optional fields are unclear, use null, empty arrays, or conservative defaults.
 Menu text may be English, Italian, French, Spanish, Chinese, Japanese, or another language. Understand culinary terms across languages instead of assuming the source text is English.
+All Chinese output must use natural Simplified Chinese (简体中文) for mainland Chinese readers. Do not output Traditional Chinese.
 Return valid JSON only. Do not include markdown, code fences, comments, or explanations.`;
 
 export const MENU_SINGLE_PASS_SCHEMA_TEXT = `{
@@ -41,8 +42,8 @@ Accuracy-first rules:
 5. Put the original visible item name in name_en exactly as shown when possible, even if it is not English.
 6. Extract prices exactly as shown in price_raw. If the menu clearly uses one currency symbol, include that symbol with every price when it is visible or clearly implied by the menu.
 7. If a price is unclear or not visible, use null.
-8. Translate item names into concise, natural, easy-to-understand Chinese. Prefer meaning-based culinary translation over phonetic transliteration.
-9. Translate descriptions only if visible and short enough. Otherwise use null.
+8. Translate item names into concise, natural, easy-to-understand Simplified Chinese (简体中文). Prefer meaning-based culinary translation over phonetic transliteration.
+9. Translate descriptions into Simplified Chinese only if visible and short enough. Otherwise use null.
 10. Generate short useful tags only when supported by the item name or visible description.
 11. Estimate spicy_level from the item name and visible description on a 0–5 scale: 0 = not spicy or unknown, 1 = hint of heat, 2 = mild, 3 = medium, 4 = hot, 5 = very hot.
 12. Return an allergens array for every item. Infer conservatively from visible ingredients and strongly implied dish names. Use [] when none can be identified.
@@ -50,6 +51,8 @@ Accuracy-first rules:
 14. Return JSON only.
 
 Translation guidance:
+- Every Chinese field, including category name_zh, item name_zh, description_zh, and tags_zh, must use Simplified Chinese characters. Never use Traditional Chinese.
+- Write for mainland Chinese diners using familiar, direct food terminology.
 - Do not leave common food terms as obscure sound-alike Chinese transliterations when a useful Chinese explanation is possible.
 - For example, translate "NDUJA, SPIANATA & GORGONZOLA" as "意式辣肉酱香肠、意式萨拉米、戈贡佐拉蓝纹奶酪", not as opaque phonetic names.
 - Translate "MARINARA" pizza as "番茄蒜香披萨" or similar; do not confuse it with "MARGHERITA".
@@ -96,9 +99,9 @@ Accuracy-first means complete item coverage:
 - Do not summarize, sample, or intentionally skip visible items.
 - Preserve categories, item names, and price_raw exactly when possible.
 - If an item has an ingredient line or short description below the item name, put that visible text in description_en.
-- Translate visible ingredient lines/descriptions into concise natural Chinese in description_zh.
+- Translate visible ingredient lines/descriptions into concise natural Simplified Chinese in description_zh.
 - For pizza, calzone, pasta, sandwiches, salads, and starters, ingredient lines are important and should not be dropped in accurate mode.
-- Translate every item name into concise natural Chinese.
+- Translate every item and category name into concise natural Simplified Chinese.
 - If item names include Italian, French, Spanish, Japanese, Korean, Chinese, or other culinary terms, translate by meaning for Chinese diners instead of using opaque phonetic transliteration.
 - Example: "NDUJA, SPIANATA & GORGONZOLA" -> "意式辣肉酱香肠、意式萨拉米、戈贡佐拉蓝纹奶酪".
 - Example: "MARINARA" pizza -> "番茄蒜香披萨", not "玛格丽特披萨".
@@ -121,7 +124,7 @@ export const MENU_SINGLE_PASS_FAST_PROMPT = `Read the menu image and return fina
 
 Extract all readable visible menu items in reading order. Do not summarize, sample, or intentionally skip clearly visible items.
 To stay compact, each item only needs name_en, name_zh, price_raw, spicy_level, and allergens. Omit other optional item fields so more items fit.
-Keep item names, prices, categories, Chinese item names, 0–5 spice estimates, and conservative allergen categories. Preserve visible or clearly implied currency symbols in price_raw. Translate non-English culinary terms by meaning for Chinese diners instead of opaque phonetic transliteration. Use [] when no allergen is identifiable. Backend will default other missing optional fields.
+Keep item names, prices, categories, Simplified Chinese item/category names, 0–5 spice estimates, and conservative allergen categories. All Chinese output must use Simplified Chinese, never Traditional Chinese. Preserve visible or clearly implied currency symbols in price_raw. Translate non-English culinary terms by meaning for Chinese diners instead of opaque phonetic transliteration. Use [] when no allergen is identifiable. Backend will default other missing optional fields.
 
 Use name_en "Menu" and name_zh "菜单" if no category heading is visible.
 If nothing can be read, return {"restaurant_name":null,"cuisine_type":null,"categories":[]}.
@@ -147,7 +150,7 @@ Rules:
 - For each category include only name_en, name_zh, and items.
 - For each item include only name_en, name_zh, price_raw, spicy_level, and allergens.
 - Preserve price_raw exactly as shown. If the menu clearly uses one currency symbol, include that symbol with every price when visible or clearly implied.
-- Translate item names into concise, natural Chinese. Translate non-English culinary terms by meaning, not opaque phonetic transliteration.
+- Translate item and category names into concise, natural Simplified Chinese (简体中文). Never output Traditional Chinese. Translate non-English culinary terms by meaning, not opaque phonetic transliteration.
 - Use null for unclear or missing prices.
 - Use a 0–5 spicy_level and a conservative allergens array. Use [] if no allergen is identifiable.
 - Do not include descriptions, tags, confidence, markdown, comments, or explanations.

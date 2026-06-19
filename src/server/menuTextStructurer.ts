@@ -8,8 +8,7 @@ import {
   parseLightweightExtractionFromText,
   type LightweightMenuExtraction,
 } from "./lightweightMenuExtraction.js";
-
-const defaultStructuringTimeoutMs = 24_000;
+import { textStructuringTimeoutMs as defaultStructuringTimeoutMs } from "../lib/menuConfig.js";
 
 export async function structureMenuTextWithMiMo(
   ocrText: string,
@@ -58,7 +57,7 @@ export async function structureMenuTextWithMiMo(
 
 function createStructuringPrompt(ocrText: string): string {
   return `Convert this restaurant menu text into minified JSON only.
-Translate item/category names into concise natural Chinese. Infer allergen categories conservatively from visible ingredients or strongly implied dish names. Estimate spicy_level from 0 to 5.
+Translate item/category names and visible descriptions into concise natural Simplified Chinese (简体中文) for mainland Chinese readers. Every name_zh and description_zh value must use Simplified Chinese characters, never Traditional Chinese. Infer allergen categories conservatively from visible ingredients or strongly implied dish names. Estimate spicy_level from 0 to 5.
 If a value is not visible, use null. Preserve visible price text exactly in price_raw.
 Keep description_en short, maximum 8 words. Use null for add-on notes that are not dish descriptions.
 Use [] when no allergen can be identified. Allowed allergens: gluten, dairy, egg, peanut, tree_nut, shellfish, mollusk, fish, seafood, soy, sesame, mustard, celery, sulfite, coconut.

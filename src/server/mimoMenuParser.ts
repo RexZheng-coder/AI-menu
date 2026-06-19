@@ -22,6 +22,16 @@ import {
   type MiMoContentPart,
 } from "./mimoChatClient.js";
 import type { ServerMenuImage } from "./menuImageInput.js";
+import {
+  maxCompletionTokensAccurate,
+  maxCompletionTokensBalanced,
+  maxCompletionTokensFast,
+  denseFallbackMaxTokens,
+  miMoApiTimeoutMs,
+  retryBudgetAccurateMs,
+  retryBudgetFastOrBalancedMs,
+  lowItemRetryThresholdFast,
+} from "../lib/menuConfig.js";
 
 export { MiMoParserError, type MiMoParserErrorCode } from "./mimoChatClient.js";
 
@@ -56,7 +66,7 @@ type ParseAttemptResult = {
 
 type RetryKind = "dense_fallback" | "low_count";
 
-const maxMiMoRequestTimeoutMs = 55_000;
+const maxMiMoRequestTimeoutMs = miMoApiTimeoutMs;
 
 let lastMiMoMenuParseDiagnostics: MiMoMenuParseDiagnostics | null = null;
 
@@ -241,7 +251,7 @@ async function requestRetryExtraction(options: {
     config: options.config,
     images: options.images,
     userPrompt: denseFallbackUsed ? MENU_SINGLE_PASS_DENSE_FALLBACK_PROMPT : MENU_SINGLE_PASS_LOW_COUNT_RETRY_PROMPT,
-    maxCompletionTokens: denseFallbackUsed ? 2200 : Math.max(options.detailConfig.maxCompletionTokens, 4500),
+    maxCompletionTokens: denseFallbackUsed ? denseFallbackMaxTokens : Math.max(options.detailConfig.maxCompletionTokens, 4500),
     logLabel: denseFallbackUsed ? "mimo_dense_fallback" : "mimo_retry",
   });
 
@@ -336,9 +346,9 @@ function createDetailConfig(): DetailConfig {
     return {
       detail,
       userPrompt: MENU_SINGLE_PASS_FAST_PROMPT,
-      maxCompletionTokens: 3000,
+      maxCompletionTokens: maxCompletionTokensFast,
       timeoutMs: maxMiMoRequestTimeoutMs,
-      lowItemRetryThreshold: 12,
+      lowItemRetryThreshold: lowItemRetryThresholdFast,
     };
   }
 
@@ -346,7 +356,7 @@ function createDetailConfig(): DetailConfig {
     return {
       detail,
       userPrompt: MENU_SINGLE_PASS_BALANCED_PROMPT,
-      maxCompletionTokens: 3800,
+      maxCompletionTokens: maxCompletionTokensBalanced,
       timeoutMs: maxMiMoRequestTimeoutMs,
       lowItemRetryThreshold: 15,
     };
@@ -355,7 +365,7 @@ function createDetailConfig(): DetailConfig {
   return {
     detail,
     userPrompt: MENU_SINGLE_PASS_ACCURATE_RUNTIME_PROMPT,
-    maxCompletionTokens: 4200,
+    maxCompletionTokens: maxCompletionTokensAccurate,
     timeoutMs: maxMiMoRequestTimeoutMs,
     lowItemRetryThreshold: 15,
   };
@@ -405,7 +415,7 @@ function createCompletenessRetryReason(attempt: ParseAttemptResult, detailConfig
 
 function shouldRetryExtraction(startedAt: number, detailConfig: DetailConfig): boolean {
   const elapsedMs = Date.now() - startedAt;
-  const retryBudgetMs = detailConfig.detail === "accurate" ? 42_000 : 25_000;
+  const retryBudgetMs = detailConfig.detail === "accurate" ? retryBudgetAccurateMs : retryBudgetFastOrBalancedMs;
   return elapsedMs < retryBudgetMs;
 }
 

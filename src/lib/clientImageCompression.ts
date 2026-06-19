@@ -10,7 +10,8 @@ export type PreparedMenuImage = {
 type CompressionOptions = {
   preferredBytesPerImage?: number;
   maxBytesPerImage?: number;
-  maxTotalBytes?: number;
+  maxBatchBytes?: number;
+  batchSize?: number;
   maxDimension?: number;
 };
 
@@ -21,21 +22,25 @@ type DecodedImage = {
   close: () => void;
 };
 
-const defaultPreferredBytesPerImage = 900_000;
-const defaultMaxBytesPerImage = 3_300_000;
-const defaultMaxTotalBytes = 3_400_000;
-const defaultMaxDimension = 2200;
-const minimumDimension = 1400;
-const qualitySteps = [0.86, 0.82, 0.78, 0.74, 0.7];
+import {
+  compressionPreferredBytesPerImage as defaultPreferredBytesPerImage,
+  compressionMaxBytesPerImage as defaultMaxBytesPerImage,
+  compressionMaxBatchBytes as defaultMaxBatchBytes,
+  compressionBatchSize as defaultBatchSize,
+  compressionMaxDimension as defaultMaxDimension,
+  compressionMinDimension as minimumDimension,
+  compressionQualitySteps as qualitySteps,
+} from "./menuConfig.js";
 
 export async function prepareMenuImages(
   files: File[],
   options: CompressionOptions = {},
 ): Promise<PreparedMenuImage[]> {
-  const maxTotalBytes = options.maxTotalBytes ?? defaultMaxTotalBytes;
+  const maxBatchBytes = options.maxBatchBytes ?? defaultMaxBatchBytes;
+  const batchSize = Math.max(1, Math.floor(options.batchSize ?? defaultBatchSize));
   const maxBytesPerImage = Math.min(
     options.maxBytesPerImage ?? defaultMaxBytesPerImage,
-    Math.floor(maxTotalBytes / Math.max(1, files.length)),
+    Math.floor(maxBatchBytes / batchSize),
   );
   const preferredBytesPerImage = Math.min(
     options.preferredBytesPerImage ?? defaultPreferredBytesPerImage,
@@ -66,19 +71,29 @@ export async function prepareMenuImages(
     throw error;
   }
 
-  const totalUploadBytes = preparedImages.reduce(
-    (sum, image) => sum + image.uploadByteLength,
-    0,
+  const oversizedBatch = chunkItems(preparedImages, batchSize).find(
+    (batch) => batch.reduce((sum, image) => sum + image.uploadByteLength, 0) > maxBatchBytes,
   );
 
-  if (totalUploadBytes > maxTotalBytes) {
+  if (oversizedBatch) {
+    const batchBytes = oversizedBatch.reduce((sum, image) => sum + image.uploadByteLength, 0);
     revokePreparedMenuImages(preparedImages);
     throw new Error(
-      `The optimized images are still ${formatMegabytes(totalUploadBytes)}. Please upload fewer images or crop them more tightly.`,
+      `One optimized upload batch is still ${formatMegabytes(batchBytes)}. Please crop those pages more tightly.`,
     );
   }
 
   return preparedImages;
+}
+
+function chunkItems<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+
+  return chunks;
 }
 
 export function revokePreparedMenuImages(images: PreparedMenuImage[]): void {

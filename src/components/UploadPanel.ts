@@ -6,7 +6,10 @@ type UploadPanelProps = {
   parseState: "idle" | "validating_files" | "uploading" | "parsing" | "success" | "error";
   hasMenu: boolean;
   isRealMode: boolean;
+  batchSize: number;
+  maxConcurrentBatches: number;
   onFilesSelected: (files: File[]) => void | Promise<void>;
+  onRemoveFile: (index: number) => void;
   onClearFiles: () => void;
   onAnalyze: () => void;
   onRetry: () => void;
@@ -64,7 +67,7 @@ export function renderUploadPanel(props: UploadPanelProps): HTMLElement {
     "Avoid glare and shadows",
     "Keep the menu flat",
     "Crop unrelated background",
-    "Upload one or two menu pages at a time",
+    "Add as many menu pages as needed",
   ]) {
     const item = document.createElement("li");
     item.textContent = tip;
@@ -131,7 +134,7 @@ export function renderUploadPanel(props: UploadPanelProps): HTMLElement {
   const status = document.createElement("div");
   status.className = "upload-status";
   status.append(renderParseStatus(props.parseState));
-  status.append(renderSelectedFiles(props.files));
+  status.append(renderSelectedFiles(props.files, props));
 
   if (props.error) {
     status.append(renderErrorPanel(props));
@@ -223,7 +226,7 @@ function getParseStatusText(parseState: UploadPanelProps["parseState"]): string 
   }
 }
 
-function renderSelectedFiles(files: PreparedMenuImage[]): HTMLElement {
+function renderSelectedFiles(files: PreparedMenuImage[], props: UploadPanelProps): HTMLElement {
   const container = document.createElement("div");
   container.className = "upload-preview-list";
 
@@ -235,14 +238,37 @@ function renderSelectedFiles(files: PreparedMenuImage[]): HTMLElement {
     return container;
   }
 
-  for (const filePreview of files) {
-    container.append(renderSelectedFile(filePreview));
+  container.append(renderUploadSummary(files, props));
+
+  for (const [index, filePreview] of files.entries()) {
+    container.append(renderSelectedFile(filePreview, index, props.onRemoveFile));
   }
 
   return container;
 }
 
-function renderSelectedFile(filePreview: PreparedMenuImage): HTMLElement {
+function renderUploadSummary(files: PreparedMenuImage[], props: UploadPanelProps): HTMLElement {
+  const summary = document.createElement("div");
+  summary.className = "upload-summary";
+
+  const pageCount = document.createElement("strong");
+  pageCount.textContent = `${files.length} ${files.length === 1 ? "page" : "pages"} selected`;
+
+  const totalBytes = files.reduce((sum, image) => sum + image.uploadByteLength, 0);
+  const batchCount = Math.ceil(files.length / props.batchSize);
+  const waveCount = Math.ceil(batchCount / props.maxConcurrentBatches);
+  const detail = document.createElement("span");
+  detail.textContent = `${formatFileSize(totalBytes)} optimized · ${batchCount} ${batchCount === 1 ? "AI batch" : "AI batches"}${waveCount > 1 ? ` · ${waveCount} queued rounds` : ""}`;
+
+  summary.append(pageCount, detail);
+  return summary;
+}
+
+function renderSelectedFile(
+  filePreview: PreparedMenuImage,
+  index: number,
+  onRemoveFile: (index: number) => void,
+): HTMLElement {
   const item = document.createElement("article");
   item.className = "upload-preview";
 
@@ -264,8 +290,15 @@ function renderSelectedFile(filePreview: PreparedMenuImage): HTMLElement {
     ? `${formatFileSize(filePreview.originalByteLength)} → ${formatFileSize(filePreview.uploadByteLength)} optimized`
     : `${formatFileSize(filePreview.uploadByteLength)} ready to upload`;
 
+  const removeButton = document.createElement("button");
+  removeButton.className = "upload-preview__remove";
+  removeButton.type = "button";
+  removeButton.textContent = "Remove";
+  removeButton.setAttribute("aria-label", `Remove ${filePreview.originalFile.name}`);
+  removeButton.addEventListener("click", () => onRemoveFile(index));
+
   meta.append(name, size);
-  item.append(image, meta);
+  item.append(image, meta, removeButton);
   return item;
 }
 

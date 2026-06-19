@@ -10,7 +10,7 @@ Default real mode uses:
 MENU_AI_PROVIDER=mimo
 MENU_PARSE_STRATEGY=vision
 MENU_PARSE_DETAIL=accurate
-MAX_PARSE_IMAGES=2
+MAX_PARSE_IMAGES=3
 ```
 
 The root route `/` and `/?parse=real` use the Vercel API route when configured. `/?parse=mock` forces the sample menu flow for demos, offline review, and environments without API keys.

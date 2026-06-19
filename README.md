@@ -52,9 +52,9 @@ Route modes:
 ## Current User Flow
 
 1. Open the app.
-2. Upload one or more menu images.
+2. Upload as many menu pages as needed. The browser optimizes them, sends batches of up to three, and limits parsing to two concurrent batches.
 3. Click `Scan Menu`.
-4. In real mode, the serverless API parses the uploaded image with MiMo and returns a sanitized `Menu`.
+4. In real mode, the serverless API parses each image batch with MiMo, then the browser merges the sanitized results into one `Menu`.
 5. Browse categories and bilingual dish cards.
 6. Compare the parsed menu with the original image and correct missing or inaccurate items locally.
 7. Add dishes to the cart.
@@ -65,7 +65,7 @@ Route modes:
 ## Demo Flow
 
 1. Open the app and start on the upload-first screen.
-2. Choose a JPG, PNG, or WebP menu image.
+2. Choose one or more JPG, PNG, or WebP menu images. There is no app-level page-count limit.
 3. Click `Scan Menu`.
 4. In real mode, the uploaded image is parsed by the configured MiMo serverless route. Use `/?parse=mock` for a cost-free demo.
 5. Browse bilingual categories, dish names, descriptions, tags, spice levels, and prices.
@@ -183,7 +183,7 @@ MIMO_MODEL=mimo-v2.5
 MENU_AI_PROVIDER=mimo
 MENU_PARSE_STRATEGY=vision
 MENU_PARSE_DETAIL=accurate
-MAX_PARSE_IMAGES=2
+MAX_PARSE_IMAGES=3
 ```
 
 Use the Xiaomi MiMo pay-as-you-go API key format, usually `sk-xxxxx`, with the OpenAI-compatible base URL above. Do not mix Token Plan `tp-xxxxx` credentials or token-plan base URLs with this route. Real image parsing also requires the selected MiMo model to support image understanding; the default is `mimo-v2.5`.

@@ -1,5 +1,6 @@
 import { getMenuItemCount, sanitizeMenu } from "./menuValidation.js";
-import type { Menu, MenuMetadata } from "../types/menu.js";
+import type { CartItem, Menu, MenuMetadata } from "../types/menu.js";
+import { maxSavedMenus, maxSavedCarts } from "./menuConfig.js";
 
 export type SavedMenuRecord = {
   menu_id: string;
@@ -11,8 +12,14 @@ export type SavedMenuRecord = {
   menu: Menu;
 };
 
+export type SavedCartData = {
+  menu_id: string;
+  items: CartItem[];
+  saved_at: string;
+};
+
 const historyStorageKey = "ai_menu_assistant.saved_menus";
-const maxSavedMenus = 10;
+const cartStorageKey = "ai_menu_assistant.saved_carts";
 
 export function getSavedMenus(): SavedMenuRecord[] {
   const storage = getStorage();
@@ -135,4 +142,84 @@ function asStringArray(record: Record<string, unknown>, key: string): string[] |
   }
 
   return value.flatMap((item) => (typeof item === "string" ? [item] : []));
+}
+
+export function saveCartToStorage(menuId: string, items: CartItem[]): void {
+  const storage = getStorage();
+
+  if (!storage) {
+    return;
+  }
+
+  if (items.length === 0) {
+    removeCartFromStorage(menuId);
+    return;
+  }
+
+  const rawValue = storage.getItem(cartStorageKey);
+  let allCarts: SavedCartData[] = [];
+
+  try {
+    allCarts = rawValue ? (JSON.parse(rawValue) as SavedCartData[]) : [];
+  } catch {
+    allCarts = [];
+  }
+
+  const filtered = allCarts.filter((cart) => cart.menu_id !== menuId);
+  filtered.push({
+    menu_id: menuId,
+    items,
+    saved_at: new Date().toISOString(),
+  });
+
+  storage.setItem(
+    cartStorageKey,
+    JSON.stringify(filtered.slice(-maxSavedCarts)),
+  );
+}
+
+export function loadCartFromStorage(menuId: string): CartItem[] | null {
+  const storage = getStorage();
+
+  if (!storage) {
+    return null;
+  }
+
+  const rawValue = storage.getItem(cartStorageKey);
+
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    const allCarts: SavedCartData[] = JSON.parse(rawValue) as SavedCartData[];
+    const cart = allCarts.find((c) => c.menu_id === menuId);
+    return cart?.items ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function removeCartFromStorage(menuId: string): void {
+  const storage = getStorage();
+
+  if (!storage) {
+    return;
+  }
+
+  const rawValue = storage.getItem(cartStorageKey);
+
+  if (!rawValue) {
+    return;
+  }
+
+  try {
+    const allCarts: SavedCartData[] = JSON.parse(rawValue) as SavedCartData[];
+    storage.setItem(
+      cartStorageKey,
+      JSON.stringify(allCarts.filter((cart) => cart.menu_id !== menuId)),
+    );
+  } catch {
+    return;
+  }
 }

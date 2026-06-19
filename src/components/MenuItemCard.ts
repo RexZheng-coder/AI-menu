@@ -205,7 +205,16 @@ function getDescriptionText(item: MenuItem): string | null {
     return null;
   }
 
+  if (isDuplicateOfName(trimmedDescription, item.name_zh, item.name_en)) {
+    return null;
+  }
+
   return trimmedDescription;
+}
+
+function isDuplicateOfName(description: string, nameZh: string, nameEn: string): boolean {
+  const desc = normalizeText(description);
+  return desc === normalizeText(nameZh) || desc === normalizeText(nameEn);
 }
 
 function isPlaceholderDescription(description: string): boolean {
@@ -223,7 +232,7 @@ function isPlaceholderDescription(description: string): boolean {
 }
 
 function renderItemDetails(item: MenuItem, category: Pick<MenuCategory, "name_en" | "name_zh">): HTMLElement | null {
-  if (isBeverageItem(item, category) || item.spicy_level === 0) {
+  if (isBeverageItem(item, category)) {
     return null;
   }
 
@@ -232,11 +241,18 @@ function renderItemDetails(item: MenuItem, category: Pick<MenuCategory, "name_en
 
   const spice = document.createElement("span");
   spice.className = `spice-meter spice-meter--level-${item.spicy_level}`;
-  spice.setAttribute("aria-label", `辣度 ${item.spicy_level}，最高 5`);
+  spice.setAttribute("aria-label", item.spicy_level > 0 ? `Spice level ${item.spicy_level} of 5` : "Not spicy");
 
   const spiceLabel = document.createElement("span");
   spiceLabel.className = "spice-meter__label";
-  spiceLabel.textContent = "辣度";
+
+  if (item.spicy_level === 0) {
+    spiceLabel.textContent = "Not spicy";
+    details.append(spiceLabel);
+    return details;
+  }
+
+  spiceLabel.textContent = "Spice";
 
   const peppers = document.createElement("span");
   peppers.className = "spice-meter__peppers";

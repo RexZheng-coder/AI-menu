@@ -13,7 +13,7 @@ MIMO_MODEL=mimo-v2.5
 MENU_AI_PROVIDER=mimo
 MENU_PARSE_STRATEGY=vision
 MENU_PARSE_DETAIL=accurate
-MAX_PARSE_IMAGES=2
+MAX_PARSE_IMAGES=3
 ```
 
 `.env.local` is ignored by Git. Do not commit real API keys or sample menu images.

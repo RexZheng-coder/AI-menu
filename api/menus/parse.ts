@@ -1,5 +1,12 @@
 import { parseMenuImagesOnServer } from "../../src/server/menuParseHandler.js";
 import { createServerMenuImages, type ServerUploadedImageFile } from "../../src/server/menuImageInput.js";
+import { menuImageBatchSize } from "../../src/lib/menuUploadConfig.js";
+import {
+  maxServerImageSizeBytes,
+  maxTotalServerUploadBytes,
+  serverHandlerTimeoutMs,
+  serverFormDataTimeoutMs,
+} from "../../src/lib/menuConfig.js";
 
 declare const process:
   | {
@@ -7,11 +14,11 @@ declare const process:
     }
   | undefined;
 
-const maxUploadSizeBytes = 10 * 1024 * 1024;
-const maxTotalUploadSizeBytes = 32 * 1024 * 1024;
-const handlerTimeoutMs = 58_000;
-const formDataTimeoutMs = 10_000;
-const defaultMaxParseImages = 2;
+const maxUploadSizeBytes = maxServerImageSizeBytes;
+const maxTotalUploadSizeBytes = maxTotalServerUploadBytes;
+const handlerTimeoutMs = serverHandlerTimeoutMs;
+const formDataTimeoutMs = serverFormDataTimeoutMs;
+const defaultMaxParseImages = menuImageBatchSize;
 const acceptedImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const acceptedImageExtensions = [".jpg", ".jpeg", ".png", ".webp"];
 

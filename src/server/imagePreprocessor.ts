@@ -1,3 +1,13 @@
+import {
+  serverOptimizationThresholdBytes,
+  serverImageMaxDimensionPx,
+  serverImageBalancedMaxDimensionPx,
+  serverImageFastMaxDimensionPx,
+  serverImageJpegQualityAccurate,
+  serverImageJpegQualityBalanced,
+  serverImageJpegQualityFast,
+} from "../lib/menuConfig.js";
+
 export type ImagePreprocessInput = {
   name: string;
   mimeType: string;
@@ -34,14 +44,13 @@ type SharpImage = {
 
 type SharpFactory = (input: Uint8Array) => SharpImage;
 
-const optimizationThresholdBytes = 900_000;
 export async function preprocessServerImage(input: ImagePreprocessInput): Promise<ImagePreprocessResult> {
   const originalByteLength = input.bytes.byteLength;
   const sha256 = await createSha256(input.bytes);
   const sharp = await loadOptionalSharp();
   const optimizationConfig = readOptimizationConfig();
 
-  if (!sharp || originalByteLength < optimizationThresholdBytes) {
+  if (!sharp || originalByteLength < serverOptimizationThresholdBytes) {
     return {
       name: input.name,
       mimeType: input.mimeType,
@@ -107,21 +116,21 @@ function readOptimizationConfig(): { maxImageDimensionPx: number; jpegQuality: n
 
   if (detail === "fast") {
     return {
-      maxImageDimensionPx: 1600,
-      jpegQuality: 82,
+      maxImageDimensionPx: serverImageFastMaxDimensionPx,
+      jpegQuality: serverImageJpegQualityFast,
     };
   }
 
   if (detail === "balanced") {
     return {
-      maxImageDimensionPx: 1800,
-      jpegQuality: 85,
+      maxImageDimensionPx: serverImageBalancedMaxDimensionPx,
+      jpegQuality: serverImageJpegQualityBalanced,
     };
   }
 
   return {
-    maxImageDimensionPx: 2000,
-    jpegQuality: 88,
+    maxImageDimensionPx: serverImageMaxDimensionPx,
+    jpegQuality: serverImageJpegQualityAccurate,
   };
 }
 

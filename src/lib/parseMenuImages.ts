@@ -1,5 +1,10 @@
 import { mockMenu } from "../mock/menuMock.js";
 import { ParseMenuError } from "./parseMenuErrors.js";
+import { mergeParsedMenus } from "./menuMerge.js";
+import {
+  maxConcurrentParseBatches,
+  menuImageBatchSize,
+} from "./menuUploadConfig.js";
 import { sanitizeMenu, validateMenuHasItems } from "./menuValidation.js";
 import type { Menu } from "../types/menu.js";
 
@@ -75,6 +80,30 @@ export async function parseMenuImages(files: File[]): Promise<Menu> {
 }
 
 async function parseWithBackend(files: File[]): Promise<Menu> {
+  const startedAt = Date.now();
+  const batches = chunkFiles(files, menuImageBatchSize);
+  const results = await mapWithConcurrency(
+    batches,
+    maxConcurrentParseBatches,
+    parseBackendBatch,
+  );
+  const menu = ensureMenuCanRender(
+    mergeParsedMenus(
+      results.map((result) => result.menu),
+      files.map((file) => file.name),
+    ),
+  );
+  lastClientParseMetadata = mergeParseMetadata(
+    results.map((result) => result.metadata),
+    menu,
+    Date.now() - startedAt,
+  );
+  return menu;
+}
+
+async function parseBackendBatch(
+  files: File[],
+): Promise<{ menu: Menu; metadata: ClientParseMetadata }> {
   const formData = new FormData();
 
   for (const file of files) {
@@ -134,8 +163,59 @@ async function parseWithBackend(files: File[]): Promise<Menu> {
       imageUrls: files.map((file) => file.name),
     }),
   );
-  lastClientParseMetadata = readParseMetadata(parsedBody, menu);
-  return menu;
+  return {
+    menu,
+    metadata: readParseMetadata(parsedBody, menu),
+  };
+}
+
+function chunkFiles(files: File[], size: number): File[][] {
+  const chunks: File[][] = [];
+
+  for (let index = 0; index < files.length; index += size) {
+    chunks.push(files.slice(index, index + size));
+  }
+
+  return chunks;
+}
+
+async function mapWithConcurrency<Input, Output>(
+  items: Input[],
+  concurrency: number,
+  task: (item: Input) => Promise<Output>,
+): Promise<Output[]> {
+  const results = new Array<Output>(items.length);
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      results[currentIndex] = await task(items[currentIndex]);
+    }
+  }
+
+  const workerCount = Math.min(Math.max(1, concurrency), items.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return results;
+}
+
+function mergeParseMetadata(
+  metadata: ClientParseMetadata[],
+  menu: Menu,
+  durationMs: number,
+): ClientParseMetadata {
+  const parseDetails = Array.from(new Set(metadata.map((item) => item.parse_detail)));
+  const providers = Array.from(new Set(metadata.map((item) => item.provider)));
+
+  return createClientMetadata(menu, {
+    parseDetail: parseDetails.length === 1 ? parseDetails[0] : "mixed",
+    provider: providers.length === 1 ? providers[0] : providers.join("+"),
+    recoveredFromTruncation: metadata.some((item) => item.recovered_from_truncation),
+    retryUsed: metadata.some((item) => item.retry_used),
+    denseFallbackUsed: metadata.some((item) => item.dense_fallback_used),
+    durationMs,
+  });
 }
 
 function shouldUseBackendParser(): boolean {

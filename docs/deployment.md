@@ -43,7 +43,7 @@ MIMO_MODEL=mimo-v2.5
 MENU_AI_PROVIDER=mimo
 MENU_PARSE_STRATEGY=vision
 MENU_PARSE_DETAIL=accurate
-MAX_PARSE_IMAGES=2
+MAX_PARSE_IMAGES=3
 ```
 
 Do not prefix these with frontend/public env names. They must stay server-side only.
@@ -100,7 +100,7 @@ Real parsing sends uploaded images to MiMo and may incur provider cost. Use non-
 
 ## Real MiMo Parser
 
-The browser accepts JPG, PNG, and WebP source images up to 25MB each, then creates temporary upload copies before calling the API. Large photos are resized to at most 2200px on the longest side and adaptively encoded as JPEG, targeting about 900KB per image and no more than roughly 3.4MB for the complete multipart request. The original file stays in the browser for preview/comparison and is not uploaded or stored by the app.
+The browser has no app-level page-count limit for JPG, PNG, or WebP source images, each up to 25MB, and creates temporary upload copies before calling the API. Large photos are resized to at most 2200px on the longest side and adaptively encoded as JPEG, targeting about 900KB per image. Images are sent in batches of up to three, with no more than two batches running concurrently and each multipart request kept below roughly 3.4MB. Additional batches wait in the browser queue. The original files stay in the browser for preview/comparison and are not uploaded or stored by the app.
 
 The Vercel route `POST /api/menus/parse` accepts these optimized multipart uploads from the `images` field. During debugging it also accepts `files` as a temporary compatibility field. It rejects non-image files, retains a defensive 10MB per-file limit, converts images to data URLs, calls MiMo server-side, and sanitizes the model output into the app's `Menu` type.
 
@@ -114,7 +114,7 @@ Allergen labels are AI-generated ordering aids, not medical guarantees. The UI e
 
 DeepSeek is not used for vision parsing because the current DeepSeek API/model rejected OpenAI-style `image_url` input in diagnostics.
 
-The route processes only the first `MAX_PARSE_IMAGES` uploads, defaulting to 2, to keep latency and provider cost predictable. Server-side preprocessing logs original bytes, optimized bytes, and a SHA-256 hash prefix. If optional `sharp` is not available, preprocessing is a safe no-op fallback.
+Each serverless request processes up to `MAX_PARSE_IMAGES` uploads, defaulting to 3. The browser can accept any practical number of pages because it queues three-image requests with a concurrency of two and merges repeated categories/items into one menu. Total processing time and provider cost grow with the number of pages, and the practical ceiling is the user's browser memory and session lifetime. Server-side preprocessing logs original bytes, optimized bytes, and a SHA-256 hash prefix. If optional `sharp` is not available, preprocessing is a safe no-op fallback.
 
 Client-side compression is required because Vercel applies its Function request-body limit before server-side code can run. Server-side `sharp` preprocessing remains a second defensive optimization, not the primary solution for oversized uploads.
 

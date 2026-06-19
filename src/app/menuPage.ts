@@ -13,7 +13,9 @@ import {
   clearSavedMenus,
   getSavedMenuById,
   getSavedMenus,
+  loadCartFromStorage,
   removeSavedMenu,
+  saveCartToStorage,
   saveMenuToHistory,
   type SavedMenuRecord,
 } from "../lib/menuHistory.js";
@@ -25,6 +27,12 @@ import {
 } from "../lib/parseMenuImages.js";
 import { inferCurrencyFromPriceText, parsePriceAmount } from "../lib/priceUtils.js";
 import { normalizeAllergens } from "../lib/allergenUtils.js";
+import {
+  maxConcurrentParseBatches,
+  maxUploadBatchBytes,
+  menuImageBatchSize,
+} from "../lib/menuUploadConfig.js";
+import { maxOriginalImageSizeBytes, parsePerBatchWaveMs } from "../lib/menuConfig.js";
 import {
   prepareMenuImages,
   revokePreparedMenuImages,
@@ -41,11 +49,8 @@ if (!appRoot) {
 
 const appRootElement = appRoot;
 const cartId = "cart_lantern_house_001";
-const maxOriginalImageSizeBytes = 25 * 1024 * 1024;
-const maxUploadImageCount = 2;
 const acceptedImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const acceptedImageExtensions = [".jpg", ".jpeg", ".png", ".webp"];
-const defaultParseTimeoutMs = 62_000;
 
 type OriginalImagePreview = {
   file: File;
@@ -105,7 +110,10 @@ function renderUpload(): HTMLElement {
     parseState,
     hasMenu: currentMenu !== null,
     isRealMode: isRealParseMode(),
+    batchSize: menuImageBatchSize,
+    maxConcurrentBatches: maxConcurrentParseBatches,
     onFilesSelected: selectUploadFiles,
+    onRemoveFile: removeUploadFile,
     onClearFiles: clearUploadFiles,
     onAnalyze: analyzeUploadedMenu,
     onRetry: retryUploadedMenu,
@@ -645,10 +653,20 @@ async function selectUploadFiles(files: File[]): Promise<void> {
   uploadError = null;
   renderApp(appRootElement);
 
-  const validation = validateUploadFiles(files);
+  const newFiles = getUniqueNewFiles(
+    uploadFiles.map((image) => image.originalFile),
+    files,
+  );
+
+  if (newFiles.length === 0) {
+    parseState = "idle";
+    renderApp(appRootElement);
+    return;
+  }
+
+  const validation = validateUploadFiles(newFiles);
 
   if (validation.error || validation.validFiles.length === 0) {
-    replaceUploadFiles([]);
     uploadError = validation.error;
     parseState = "error";
     renderApp(appRootElement);
@@ -656,12 +674,14 @@ async function selectUploadFiles(files: File[]): Promise<void> {
   }
 
   try {
-    const preparedImages = await prepareMenuImages(validation.validFiles);
-    replaceUploadFiles(preparedImages);
+    const preparedImages = await prepareMenuImages(validation.validFiles, {
+      batchSize: menuImageBatchSize,
+      maxBatchBytes: maxUploadBatchBytes,
+    });
+    uploadFiles = [...uploadFiles, ...preparedImages];
     uploadError = null;
     parseState = "idle";
   } catch (error) {
-    replaceUploadFiles([]);
     uploadError = new ParseMenuError(
       "file_too_large",
       error instanceof Error
@@ -673,6 +693,20 @@ async function selectUploadFiles(files: File[]): Promise<void> {
   } finally {
     renderApp(appRootElement);
   }
+}
+
+function removeUploadFile(index: number): void {
+  const removedImage = uploadFiles[index];
+
+  if (!removedImage) {
+    return;
+  }
+
+  URL.revokeObjectURL(removedImage.previewUrl);
+  uploadFiles = uploadFiles.filter((_, imageIndex) => imageIndex !== index);
+  uploadError = null;
+  parseState = "idle";
+  renderApp(appRootElement);
 }
 
 function clearUploadFiles(): void {
@@ -704,7 +738,7 @@ async function analyzeUploadedMenu(): Promise<void> {
     renderApp(appRootElement);
     const parsedMenu = await withParseTimeout(
       parseMenuImages(uploadFiles.map((filePreview) => filePreview.uploadFile)),
-      getParseTimeoutMs(),
+      getParseTimeoutMs(uploadFiles.length),
     );
     setCurrentMenu(parsedMenu, {
       quality: getLastClientParseMetadata(),
@@ -842,6 +876,7 @@ function saveEditedItem(formData: FormData): void {
   updateParseQualityCounts(currentMenu);
   syncCartItem(item);
   orderSummary = null;
+  persistCart();
   savedMenus = saveMenuToHistory(currentMenu);
   closeEditDialog();
 }
@@ -861,6 +896,7 @@ function deleteMenuItem(itemId: string): void {
   cartItems = cartItems.filter((item) => item.item_id !== itemId);
   updateParseQualityCounts(currentMenu);
   orderSummary = null;
+  persistCart();
   savedMenus = saveMenuToHistory(currentMenu);
   renderApp(appRootElement);
 }
@@ -892,7 +928,7 @@ function setCurrentMenu(
 ): void {
   revokeOriginalPreviews();
   currentMenu = menu;
-  cartItems = [];
+  cartItems = loadCartFromStorage(menu.menu_id) ?? [];
   orderSummary = null;
   isCartOpen = false;
   parseQuality = options.quality ?? null;
@@ -938,16 +974,6 @@ function validateUploadFiles(files: File[]): { validFiles: File[]; error: ParseM
     };
   }
 
-  if (files.length > maxUploadImageCount) {
-    return {
-      validFiles: [],
-      error: new ParseMenuError(
-        "invalid_request",
-        `Choose up to ${maxUploadImageCount} menu images at a time so they stay within the secure upload limit.`,
-      ),
-    };
-  }
-
   if (oversizedFiles.length > 0) {
     return {
       validFiles,
@@ -962,6 +988,25 @@ function validateUploadFiles(files: File[]): { validFiles: File[]; error: ParseM
     validFiles,
     error: null,
   };
+}
+
+function getUniqueNewFiles(existingFiles: File[], newFiles: File[]): File[] {
+  const existingFingerprints = new Set(existingFiles.map(createFileFingerprint));
+  const newFilesByFingerprint = new Map<string, File>();
+
+  for (const file of newFiles) {
+    const fingerprint = createFileFingerprint(file);
+
+    if (!existingFingerprints.has(fingerprint)) {
+      newFilesByFingerprint.set(fingerprint, file);
+    }
+  }
+
+  return Array.from(newFilesByFingerprint.values());
+}
+
+function createFileFingerprint(file: File): string {
+  return `${file.name}|${file.size}|${file.lastModified}`;
 }
 
 function isAcceptedImageFile(file: File): boolean {
@@ -989,6 +1034,7 @@ function addToCart(item: MenuItem): void {
   }
 
   orderSummary = null;
+  persistCart();
   renderCart();
 }
 
@@ -1001,6 +1047,7 @@ function increaseCartItem(itemId: string): void {
     item.item_id === itemId ? updateCartItemQuantity(item, item.quantity + 1) : item,
   );
   orderSummary = null;
+  persistCart();
   renderCart();
 }
 
@@ -1009,12 +1056,14 @@ function decreaseCartItem(itemId: string): void {
     .map((item) => (item.item_id === itemId ? updateCartItemQuantity(item, item.quantity - 1) : item))
     .filter((item) => item.quantity > 0);
   orderSummary = null;
+  persistCart();
   renderCart();
 }
 
 function removeCartItem(itemId: string): void {
   cartItems = cartItems.filter((item) => item.item_id !== itemId);
   orderSummary = null;
+  persistCart();
   renderCart();
 }
 
@@ -1029,6 +1078,7 @@ function updateCartItemNotes(itemId: string, notes: string): void {
       : item,
   );
   orderSummary = null;
+  persistCart();
   window.setTimeout(renderCart, 0);
 }
 
@@ -1198,7 +1248,7 @@ function withParseTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T>
   });
 }
 
-function getParseTimeoutMs(): number {
+function getParseTimeoutMs(imageCount: number): number {
   const params = new URLSearchParams(window.location.search);
   const timeoutMs = Number(params.get("parseTimeoutMs"));
 
@@ -1206,7 +1256,9 @@ function getParseTimeoutMs(): number {
     return timeoutMs;
   }
 
-  return defaultParseTimeoutMs;
+  const batchCount = Math.max(1, Math.ceil(imageCount / menuImageBatchSize));
+  const batchWaves = Math.ceil(batchCount / maxConcurrentParseBatches);
+  return batchWaves * parsePerBatchWaveMs;
 }
 
 function isRealParseMode(): boolean {
@@ -1308,4 +1360,10 @@ function slugify(value: string): string {
     .replace(/^_+|_+$/g, "");
 
   return slug || "item";
+}
+
+function persistCart(): void {
+  if (currentMenu) {
+    saveCartToStorage(currentMenu.menu_id, cartItems);
+  }
 }
