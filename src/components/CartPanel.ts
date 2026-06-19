@@ -200,7 +200,7 @@ function renderSummary(props: CartPanelProps): HTMLElement {
 
   const displayedSummary = formatSummaryDisplay(summary, props.summaryLanguage);
   const copyButton = document.createElement("button");
-  copyButton.className = "copy-summary-button";
+  copyButton.className = "copy-summary-button" + (props.copyStatus ? " copy-summary-button--copied" : "");
   copyButton.type = "button";
   copyButton.textContent = props.copyStatus ?? "Copy";
   copyButton.addEventListener("click", () => props.onCopySummary(displayedSummary));
