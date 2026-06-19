@@ -43,8 +43,6 @@ export const maxCompletionTokensFast = 3000;
 export const denseFallbackMaxTokens = 2200;
 export const retryBudgetAccurateMs = 42_000;
 export const retryBudgetFastOrBalancedMs = 25_000;
-export const lowItemRetryThresholdAccurate = 15;
-export const lowItemRetryThresholdFast = 12;
 
 // --- History ---
 export const maxSavedMenus = 10;

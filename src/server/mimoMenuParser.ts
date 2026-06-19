@@ -30,7 +30,6 @@ import {
   miMoApiTimeoutMs,
   retryBudgetAccurateMs,
   retryBudgetFastOrBalancedMs,
-  lowItemRetryThresholdFast,
 } from "../lib/menuConfig.js";
 
 export { MiMoParserError, type MiMoParserErrorCode } from "./mimoChatClient.js";
@@ -54,7 +53,6 @@ type DetailConfig = {
   userPrompt: string;
   maxCompletionTokens: number;
   timeoutMs: number;
-  lowItemRetryThreshold: number;
 };
 
 type ParseAttemptResult = {
@@ -64,7 +62,7 @@ type ParseAttemptResult = {
   recoveredFromTruncation: boolean;
 };
 
-type RetryKind = "dense_fallback" | "low_count";
+type RetryKind = "dense_fallback";
 
 const maxMiMoRequestTimeoutMs = miMoApiTimeoutMs;
 
@@ -225,7 +223,7 @@ async function parseExtractionWithRetry(options: {
     ...options,
     retryKind: retryKind ?? "dense_fallback",
     retryReason: parsedAttempt
-      ? createCompletenessRetryReason(parsedAttempt, options.detailConfig)
+      ? createCompletenessRetryReason(parsedAttempt)
       : options.finishReason === "length"
         ? "length"
         : "invalid_json",
@@ -348,7 +346,6 @@ function createDetailConfig(): DetailConfig {
       userPrompt: MENU_SINGLE_PASS_FAST_PROMPT,
       maxCompletionTokens: maxCompletionTokensFast,
       timeoutMs: maxMiMoRequestTimeoutMs,
-      lowItemRetryThreshold: lowItemRetryThresholdFast,
     };
   }
 
@@ -358,7 +355,6 @@ function createDetailConfig(): DetailConfig {
       userPrompt: MENU_SINGLE_PASS_BALANCED_PROMPT,
       maxCompletionTokens: maxCompletionTokensBalanced,
       timeoutMs: maxMiMoRequestTimeoutMs,
-      lowItemRetryThreshold: 15,
     };
   }
 
@@ -367,7 +363,6 @@ function createDetailConfig(): DetailConfig {
     userPrompt: MENU_SINGLE_PASS_ACCURATE_RUNTIME_PROMPT,
     maxCompletionTokens: maxCompletionTokensAccurate,
     timeoutMs: maxMiMoRequestTimeoutMs,
-    lowItemRetryThreshold: 15,
   };
 }
 
@@ -386,28 +381,16 @@ function shouldRetryForCompleteness(attempt: ParseAttemptResult, detailConfig: D
 }
 
 function getRetryKindForAttempt(attempt: ParseAttemptResult, detailConfig: DetailConfig): RetryKind | null {
-  if (detailConfig.detail !== "accurate") {
-    return attempt.finishReason === "length" || attempt.recoveredFromTruncation ? "dense_fallback" : null;
-  }
-
-  if (attempt.finishReason === "length" || attempt.recoveredFromTruncation) {
-    return "dense_fallback";
-  }
-
-  return countItems(attempt.extraction) < detailConfig.lowItemRetryThreshold ? "low_count" : null;
+  return attempt.finishReason === "length" || attempt.recoveredFromTruncation ? "dense_fallback" : null;
 }
 
-function createCompletenessRetryReason(attempt: ParseAttemptResult, detailConfig: DetailConfig): string {
+function createCompletenessRetryReason(attempt: ParseAttemptResult): string {
   if (attempt.finishReason === "length") {
     return "length";
   }
 
   if (attempt.recoveredFromTruncation) {
     return "recovered_from_truncation";
-  }
-
-  if (countItems(attempt.extraction) < detailConfig.lowItemRetryThreshold) {
-    return "low_item_count";
   }
 
   return "invalid_json";
