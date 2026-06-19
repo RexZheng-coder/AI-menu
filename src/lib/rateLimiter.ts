@@ -1,5 +1,9 @@
-// Rate limiting utility using Vercel KV.
+// Rate limiting utility using Upstash Redis (via REST API).
 // Returns true if the request is allowed, false if rate limited.
+//
+// To enable:
+//   1. Create an Upstash Redis database from the Vercel marketplace
+//   2. Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN in Vercel env vars
 
 declare const process:
   | {
@@ -10,7 +14,7 @@ declare const process:
 const maxDailyRequests = 20;
 const maxHourlyRequests = 5;
 
-type RateLimitResult = {
+export type RateLimitResult = {
   allowed: boolean;
   dailyUsed: number;
   hourlyUsed: number;
@@ -25,8 +29,8 @@ export async function checkRateLimit(ip: string): Promise<RateLimitResult> {
 
   try {
     const [dailyUsed, hourlyUsed] = await Promise.all([
-      kvIncr(dailyKey, 86400),  // 24 hours
-      kvIncr(hourlyKey, 3600),  // 1 hour
+      redisIncr(dailyKey, 86400),  // 24 hours
+      redisIncr(hourlyKey, 3600),  // 1 hour
     ]);
 
     return {
@@ -35,43 +39,46 @@ export async function checkRateLimit(ip: string): Promise<RateLimitResult> {
       hourlyUsed,
     };
   } catch {
-    // If KV is down, allow the request rather than breaking the app.
+    // If Redis is unavailable, allow the request rather than breaking the app.
     return { allowed: true, dailyUsed: 0, hourlyUsed: 0 };
   }
 }
 
-// --- Vercel KV REST helpers (zero-dependency, uses global fetch) ---
+// --- Upstash Redis REST helpers (zero dependencies) ---
 
-const kvToken = typeof process !== "undefined" ? process.env?.KV_REST_API_TOKEN : undefined;
-const kvUrl = typeof process !== "undefined" ? process.env?.KV_REST_API_URL : undefined;
+const redisToken =
+  typeof process !== "undefined" ? process.env?.UPSTASH_REDIS_REST_TOKEN : undefined;
+const redisUrl =
+  typeof process !== "undefined" ? process.env?.UPSTASH_REDIS_REST_URL : undefined;
 
-async function kvIncr(key: string, ttlSeconds: number): Promise<number> {
-  if (!kvToken || !kvUrl) {
-    return 0; // KV not configured — rate limiting disabled.
+async function redisIncr(key: string, ttlSeconds: number): Promise<number> {
+  if (!redisToken || !redisUrl) {
+    return 0; // Redis not configured — rate limiting disabled.
   }
 
-  const response = await fetch(`${kvUrl.replace(/\/$/, "")}/incr/${key}`, {
+  const base = redisUrl.replace(/\/+$/, "");
+
+  const response = await fetch(`${base}/incr/${key}`, {
     method: "GET",
     headers: {
-      Authorization: `Bearer ${kvToken}`,
-      "Content-Type": "application/json",
+      Authorization: `Bearer ${redisToken}`,
     },
   });
 
   if (!response.ok) {
-    throw new Error(`KV incr failed: ${response.status}`);
+    throw new Error(`Redis incr failed: ${response.status}`);
   }
 
-  const body = (await response.json()) as { result: number };
-  const count = body.result;
+  const body = (await response.json()) as { result: string };
+  // Upstash returns result as a string like "1"
+  const count = Number(body.result);
 
-  // Set TTL on first write
+  // Set TTL on first write — subsequent INCR calls won't reset it
   if (count === 1) {
-    await fetch(`${kvUrl.replace(/\/$/, "")}/expire/${key}/${ttlSeconds}`, {
+    await fetch(`${base}/expire/${key}/${ttlSeconds}`, {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${kvToken}`,
-        "Content-Type": "application/json",
+        Authorization: `Bearer ${redisToken}`,
       },
     });
   }
