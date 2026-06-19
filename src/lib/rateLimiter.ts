@@ -2,8 +2,8 @@
 // Returns true if the request is allowed, false if rate limited.
 //
 // To enable:
-//   1. Create an Upstash Redis database from the Vercel marketplace
-//   2. Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN in Vercel env vars
+//   Set KV_REST_API_URL and KV_REST_API_TOKEN in Vercel environment variables.
+//   These are provided when you create an Upstash Redis DB from the Vercel marketplace.
 
 declare const process:
   | {
@@ -47,9 +47,9 @@ export async function checkRateLimit(ip: string): Promise<RateLimitResult> {
 // --- Upstash Redis REST helpers (zero dependencies) ---
 
 const redisToken =
-  typeof process !== "undefined" ? process.env?.UPSTASH_REDIS_REST_TOKEN : undefined;
+  typeof process !== "undefined" ? process.env?.KV_REST_API_TOKEN : undefined;
 const redisUrl =
-  typeof process !== "undefined" ? process.env?.UPSTASH_REDIS_REST_URL : undefined;
+  typeof process !== "undefined" ? process.env?.KV_REST_API_URL : undefined;
 
 async function redisIncr(key: string, ttlSeconds: number): Promise<number> {
   if (!redisToken || !redisUrl) {
