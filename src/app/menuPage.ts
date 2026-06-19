@@ -161,9 +161,29 @@ function renderHeader(menu: Menu): HTMLElement {
   eyebrow.className = "menu-header__eyebrow";
   eyebrow.textContent = menu.restaurant.cuisine_type ?? "Restaurant menu";
 
+  const titleRow = document.createElement("div");
+  titleRow.className = "menu-header__title-row";
+
   const title = document.createElement("h1");
   title.className = "menu-header__title";
   title.textContent = menu.restaurant.name;
+
+  const backButton = document.createElement("button");
+  backButton.className = "menu-header__back-button";
+  backButton.type = "button";
+  backButton.textContent = "Back to menus";
+  backButton.addEventListener("click", () => {
+    currentMenu = null;
+    cartItems = [];
+    orderSummary = null;
+    isCartOpen = false;
+    editingItemId = null;
+    editingCategoryId = null;
+    isAddingItem = false;
+    renderApp(appRootElement);
+  });
+
+  titleRow.append(title, backButton);
 
   const meta = document.createElement("p");
   meta.className = "menu-header__meta";
@@ -177,7 +197,7 @@ function renderHeader(menu: Menu): HTMLElement {
     renderStat(menu.metadata.source_type === "image_upload" ? "AI parsed" : "Demo menu", "source"),
   );
 
-  header.append(eyebrow, title, meta, stats);
+  header.append(eyebrow, titleRow, meta, stats);
   return header;
 }
 

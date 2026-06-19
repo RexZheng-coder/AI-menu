@@ -512,6 +512,36 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
+.menu-header__title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 14px;
+  margin-top: 10px;
+}
+
+.menu-header__back-button {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 1px solid rgba(35, 111, 93, 0.2);
+  border-radius: 999px;
+  background: #eef6f2;
+  color: #236f5d;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: background 150ms ease;
+}
+
+.menu-header__back-button:hover,
+.menu-header__back-button:focus-visible {
+  background: #dceee5;
+  transform: translateY(-1px);
+}
+
 .menu-header__meta {
   max-width: 620px;
   margin: 18px 0 0;
