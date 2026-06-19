@@ -2130,9 +2130,6 @@ button:disabled {
     gap: 3px;
     border-radius: 5px;
     text-align: center;
-    transition:
-      background-color 280ms ease,
-      color 280ms ease;
   }
 
   .category-nav__link::before {
