@@ -2397,7 +2397,25 @@ button:disabled {
 button:not(:disabled):active,
 .file-picker:active,
 .history-item__load:active {
-  transform: scale(0.96) !important;
+  transform: scale(0.95) !important;
+  transition: transform 60ms ease !important;
+}
+
+/* Stronger press feedback on mobile/touch devices */
+@media (hover: none) and (pointer: coarse) {
+  button:not(:disabled):active,
+  .file-picker:active,
+  .history-item__load:active {
+    transform: scale(0.93) !important;
+  }
+
+  .category-nav__link:active {
+    background: #dce8e0 !important;
+  }
+
+  .item-card:active {
+    transform: scale(0.99) !important;
+  }
 }
 button:not(:disabled),
 .file-picker,
