@@ -1,59 +1,56 @@
-# Manual Parse Flow Tests
+# Parse Flow Tests
 
-Run the static app:
+Manual test suite covering the full parse flow. Run these after any parser, prompt, or UI change.
+
+## Setup
 
 ```bash
 npm run build
 npm run start
 ```
 
-Open `http://127.0.0.1:4173/` for real mode when a Vercel API route is available. Open `http://127.0.0.1:4173/?parse=mock` for static mock tests.
+Open the app at `http://127.0.0.1:4173/` (real mode with Vercel API route) or `http://127.0.0.1:4173/?parse=mock` (mock mode).
 
 ## Mock Success
 
-1. Open `http://127.0.0.1:4173/?parse=mock`.
+1. Open `?parse=mock`.
 2. Upload a `.jpg`, `.jpeg`, `.png`, or `.webp` file.
-3. Confirm the button is enabled.
-4. Click `Scan Menu`.
-5. Confirm the phase text moves through uploading/parsing and the Lantern House menu renders.
-6. Add a dish, generate an order summary, and confirm the cart still works.
+3. Confirm the "Scan Menu" button is enabled.
+4. Click "Scan Menu" — confirm the status moves through uploading/parsing and the sample menu renders.
+5. Add a dish, generate an order summary, and confirm the cart works.
 
 ## Mock Failure
 
-1. Open `http://127.0.0.1:4173/?parse=mock`.
-2. Upload an image file with `fail` in the file name, such as `fail-menu.png`.
-3. Click `Scan Menu`.
-4. Confirm a friendly error appears.
-5. Click `Retry` to retry with the same file, or `Clear` to start over.
+1. Open `?parse=mock`.
+2. Upload a file named `fail-menu.png` (any name containing "fail").
+3. Click "Scan Menu" — confirm a friendly error appears.
+4. Click "Retry" or "Clear".
 
-## Real Mode Missing Backend Or Env
+## Missing Backend
 
-1. Open `http://127.0.0.1:4173/` or `http://127.0.0.1:4173/?parse=real`.
-2. Upload a valid image.
-3. Click `Scan Menu`.
-4. Confirm the app reports that real parsing is not available or not configured and offers Mock Demo Mode.
+1. Open `/` or `?parse=real` without MiMo environment variables configured.
+2. Upload a valid image and click "Scan Menu".
+3. Confirm the app reports real parsing is unavailable and offers mock demo mode.
 
 ## Invalid File Type
 
 1. Upload a non-image file such as `.txt`.
-2. Confirm the app rejects it and keeps `Scan Menu` disabled.
+2. Confirm the app rejects it and keeps "Scan Menu" disabled.
 
-## Too-Large Image
+## Large Image
 
-1. Upload a JPG, PNG, or WebP image between 5MB and 25MB.
-2. Confirm the app shows the original size, optimized upload size, and enables scanning.
-3. Confirm the optimized image is below the Vercel-safe request budget and the scan reaches the backend.
-4. Upload an image larger than 25MB and confirm the app rejects it with the source-image size message.
+1. Upload a JPG, PNG, or WebP image between 5 MB and 25 MB.
+2. Confirm the app shows original and optimized sizes.
+3. Confirm the optimized image is within the request budget.
+4. Upload an image larger than 25 MB and confirm rejection with the size limit message.
 
 ## Parse Timeout
 
-1. Open `http://127.0.0.1:4173/?parseTimeoutMs=100`.
-2. Upload an image file with `slow` in the file name, such as `slow-menu.png`.
-3. Click `Scan Menu`.
-4. Confirm the timeout error appears with `Retry` and `Clear`.
+1. Open `?parseTimeoutMs=100`.
+2. Upload a file named `slow-menu.png` (any name containing "slow").
+3. Click "Scan Menu" — confirm the timeout error appears with retry options.
 
 ## Empty Parsed Menu
 
-1. Upload an image file with `empty` in the file name, such as `empty-menu.png`.
-2. Click `Scan Menu`.
-3. Confirm the app shows the empty-menu error instead of rendering a blank menu.
+1. Upload a file named `empty-menu.png` (any name containing "empty").
+2. Click "Scan Menu" — confirm the empty-menu error is shown instead of a blank menu.
