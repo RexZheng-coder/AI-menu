@@ -80,6 +80,9 @@ let disposeMenuNavigation: (() => void) | null = null;
 
 renderApp(appRootElement);
 
+// Enable :active pseudo-class on touch devices
+document.addEventListener("touchstart", () => undefined, { passive: true });
+
 function renderApp(root: HTMLElement): void {
   disposeMenuNavigation?.();
   disposeMenuNavigation = null;

@@ -18,6 +18,8 @@ body {
     linear-gradient(180deg, rgba(207, 79, 45, 0.1), rgba(207, 79, 45, 0) 280px),
     #f6f7f5;
   overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 a {
