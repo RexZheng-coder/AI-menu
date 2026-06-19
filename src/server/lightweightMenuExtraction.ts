@@ -2,10 +2,12 @@ import { sanitizeMenu } from "../lib/menuValidation.js";
 import { normalizeAllergens } from "../lib/allergenUtils.js";
 import { inferCurrencyFromPriceText, parsePriceAmount } from "../lib/priceUtils.js";
 import type { Menu, SpicyLevel } from "../types/menu.js";
+import { MiMoParserError } from "./mimoChatClient.js";
 
 export type LightweightMenuExtraction = {
   restaurant_name: string | null;
   cuisine_type: string | null;
+  quality_issue?: string | null;
   categories: LightweightMenuCategory[];
 };
 
@@ -63,6 +65,14 @@ export function parseLightweightExtractionWithMetadata(text: string): Lightweigh
 
 export function sanitizeLightweightExtraction(input: unknown): LightweightMenuExtraction {
   const source = asRecord(input);
+  const qualityIssue = asNullableString(source.quality_issue);
+
+  if (qualityIssue === "unreadable") {
+    throw new MiMoParserError(
+      "EMPTY_MENU_EXTRACTION",
+      "The menu photo is too blurry or dark to read. Please take a clearer photo with good lighting.",
+    );
+  }
 
   return {
     restaurant_name: asNullableString(source.restaurant_name),

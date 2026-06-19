@@ -85,7 +85,10 @@ If nothing can be read:
 "restaurant_name": null,
 "cuisine_type": null,
 "categories": []
-}`;
+}
+
+If the photo is too blurry or dark to read, return:
+{"quality_issue":"unreadable","restaurant_name":null,"cuisine_type":null,"categories":[]}`;
 
 export const MENU_SINGLE_PASS_BALANCED_PROMPT = `${MENU_SINGLE_PASS_ACCURATE_PROMPT}
 
@@ -115,7 +118,8 @@ Accuracy-first means complete item coverage:
 - Backend will default missing tags.
 - If output space is tight, preserve all item names/prices first, then keep short descriptions for as many items as possible.
 - Use name_en "Menu" and name_zh "菜单" if no category heading is visible.
-- If nothing can be read, return {"restaurant_name":null,"cuisine_type":null,"categories":[]}.
+- If the photo is too blurry, too dark, or has too much glare to read the menu text, return the special quality_issue field instead of guessing: {"quality_issue":"unreadable","restaurant_name":null,"cuisine_type":null,"categories":[]}.
+- If nothing is visible or readable in the image at all, return: {"restaurant_name":null,"cuisine_type":null,"categories":[]}.
 
 Accurate shape:
 {"restaurant_name":string|null,"cuisine_type":string|null,"categories":[{"name_en":string,"name_zh":string,"items":[{"name_en":string,"name_zh":string,"description_en":string|null,"description_zh":string|null,"price_raw":string|null,"tags_zh"?:string[],"spicy_level":0|1|2|3|4|5,"allergens":string[]}]}]}`;
@@ -127,6 +131,7 @@ To stay compact, each item only needs name_en, name_zh, price_raw, spicy_level, 
 Keep item names, prices, categories, Simplified Chinese item/category names, 0–5 spice estimates, and conservative allergen categories. All Chinese output must use Simplified Chinese, never Traditional Chinese. Preserve visible or clearly implied currency symbols in price_raw. Translate non-English culinary terms by meaning for Chinese diners instead of opaque phonetic transliteration. Use [] when no allergen is identifiable. Backend will default other missing optional fields.
 
 Use name_en "Menu" and name_zh "菜单" if no category heading is visible.
+If the photo is too blurry or dark to read, return: {"quality_issue":"unreadable","restaurant_name":null,"cuisine_type":null,"categories":[]}.
 If nothing can be read, return {"restaurant_name":null,"cuisine_type":null,"categories":[]}.
 
 Compact shape:
@@ -155,6 +160,7 @@ Rules:
 - Use a 0–5 spicy_level and a conservative allergens array. Use [] if no allergen is identifiable.
 - Do not include descriptions, tags, confidence, markdown, comments, or explanations.
 - If no category heading is visible, use "Menu" and "菜单".
+- If the photo is too blurry or dark to read, return: {"quality_issue":"unreadable","restaurant_name":null,"cuisine_type":null,"categories":[]}.
 - If nothing can be read, return {"restaurant_name":null,"cuisine_type":null,"categories":[]}.
 
 Compact shape:
