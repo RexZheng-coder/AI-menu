@@ -1757,19 +1757,19 @@ button:disabled {
   left: 0;
   width: 3px;
   border-radius: 3px;
-  background-color: transparent;
+  background: transparent;
   content: "";
   transition: background-color 200ms ease;
 }
 
 .category-nav__link:hover,
 .category-nav__link:focus-visible {
-  background-color: #f0f5f1;
+  background: #f0f5f1;
   transform: none;
 }
 
 .category-nav__link--active {
-  background-color: #e7f1ec;
+  background: #e7f1ec;
   color: #183e33;
 }
 

@@ -83,6 +83,33 @@ renderApp(appRootElement);
 // Enable :active pseudo-class on touch devices
 document.addEventListener("touchstart", () => undefined, { passive: true });
 
+function smoothScrollTo(targetY: number, duration: number): void {
+  const startY = window.scrollY;
+  const distance = targetY - startY;
+
+  if (Math.abs(distance) < 10) {
+    window.scrollTo(0, targetY);
+    return;
+  }
+
+  const startTime = performance.now();
+
+  function step(currentTime: number): void {
+    const elapsed = currentTime - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    // Ease-out cubic: starts fast, decelerates gracefully
+    const ease = 1 - Math.pow(1 - progress, 3);
+
+    window.scrollTo(0, startY + distance * ease);
+
+    if (progress < 1) {
+      requestAnimationFrame(step);
+    }
+  }
+
+  requestAnimationFrame(step);
+}
+
 function renderApp(root: HTMLElement): void {
   disposeMenuNavigation?.();
   disposeMenuNavigation = null;
@@ -385,7 +412,7 @@ function initializeMenuNavigation(shell: HTMLElement, menu: Menu): () => void {
     }
 
     setActiveCategory(categoryId);
-    section.scrollIntoView({ behavior: "smooth", block: "start" });
+    smoothScrollTo(section.offsetTop - 20, 400);
   };
 
   const updateActiveCategory = (): void => {
