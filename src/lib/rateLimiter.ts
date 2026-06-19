@@ -11,8 +11,8 @@ declare const process:
     }
   | undefined;
 
-const maxDailyRequests = 20;
-const maxHourlyRequests = 5;
+const maxDailyRequests = 30;
+const maxHourlyRequests = 10;
 
 export type RateLimitResult = {
   allowed: boolean;
