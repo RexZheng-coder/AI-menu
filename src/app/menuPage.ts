@@ -412,7 +412,7 @@ function initializeMenuNavigation(shell: HTMLElement, menu: Menu): () => void {
     }
 
     setActiveCategory(categoryId);
-    smoothScrollTo(section.offsetTop - 20, 600);
+    smoothScrollTo(section.offsetTop - 20, 800);
   };
 
   const updateActiveCategory = (): void => {
